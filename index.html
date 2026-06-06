@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>北辰射箭計分系統 v1.4.1</title>
+    <title>北辰射箭計分系統 v1.4.2</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -258,7 +258,7 @@
 
     <div class="system-footer">
         NORTH STAR ARCHERY LAB SYSTEM © 2026<br>
-        DESIGNED BY ROY | VERSION 1.4.1 延時25秒運科版
+        DESIGNED BY ROY | VERSION 1.4.2 記憶體防卡死極速版
     </div>
 </div>
 
@@ -295,7 +295,6 @@
     function playBeep(type) {
         try {
             ensureAudioContext();
-            
             let osc = audioCtx.createOscillator();
             let gainNode = audioCtx.createGain();
             osc.connect(gainNode); gainNode.connect(audioCtx.destination);
@@ -312,21 +311,16 @@
                 osc.start(); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
                 osc.stop(audioCtx.currentTime + 0.2);
             }
-        } catch(e) {
-            console.log("Audio play blocked:", e);
-        }
+        } catch(e) { console.log("Audio blocked:", e); }
     }
 
     function startSession() {
         ensureAudioContext();
-        
         TOTAL_ARROWS_LIMIT = parseInt(document.getElementById('cfgTotalArrows').value);
         TOTAL_ROWS = TOTAL_ARROWS_LIMIT / 6;
         fullRoundData = Array.from({ length: TOTAL_ROWS }, () => []);
-        
         document.getElementById('timerDisplay').textContent = document.getElementById('cfgPrepSec').value;
         document.getElementById('setupPanel').style.display = 'none';
-        
         initTable();
         initToggleCheckboxes();
         initPanZoomTarget(); 
@@ -371,7 +365,6 @@
         const tWrap = document.getElementById('targetWrapper');
         const vWrap = document.getElementById('videoWrapper');
         const vName = document.getElementById('currentViewName');
-
         if (currentView === "TARGET") {
             tWrap.style.display = "none"; vWrap.style.display = "flex";
             currentView = "VIDEO"; vName.textContent = "📹 25秒動態回放視窗";
@@ -381,9 +374,7 @@
         }
     }
 
-    function forceReturnToTarget() {
-        if (currentView === "VIDEO") { switchMainView(); }
-    }
+    function forceReturnToTarget() { if (currentView === "VIDEO") { switchMainView(); } }
 
     function resetTimer() {
         clearInterval(timerInterval); timerState = "IDLE";
@@ -416,14 +407,9 @@
 
             timerInterval = setInterval(() => {
                 currentSeconds--; disp.textContent = currentSeconds;
-
-                if (timerState === "SHOOT" && currentSeconds <= 10 && currentSeconds > 0) { 
-                    playBeep('short'); 
-                }
-
+                if (timerState === "SHOOT" && currentSeconds <= 10 && currentSeconds > 0) { playBeep('short'); }
                 if (timerState === "PREP" && currentSeconds <= 0) {
                     playBeep('short');
-                    
                     timerState = "SHOOT"; currentSeconds = parseInt(document.getElementById('cfgShootSec').value);
                     box.className = "timer-box shoot-phase"; disp.style.color = "#2ecc71";
                     status.innerHTML = "🏹 射擊中<br>計時獨立";
@@ -437,9 +423,11 @@
         }
     }
 
+    // 🧠 記憶體核心優化：全域重複使用單一離屏畫布，杜絕不斷建立 DOM 導致記憶體爆掉
     let videoStream = null; let camAnimationId = null; let frameBuffer = [];
-    // 💡 核心微調：25 秒 * 24 幀 = 600 幀快取緩衝
     const DELAY_FRAMES = 25 * 24; 
+    let offscreenCanvas = document.createElement('canvas');
+    let offscreenCtx = offscreenCanvas.getContext('2d');
 
     function toggleCameraHardware() {
         const isChecked = document.getElementById('chkCamActive').checked;
@@ -452,18 +440,29 @@
             .then(stream => {
                 videoStream = stream;
                 const videoEl = document.getElementById('hiddenVideo'); videoEl.srcObject = stream;
-                canvas.width = 320; canvas.height = 240; frameBuffer = [];
+                canvas.width = 320; canvas.height = 240;
+                offscreenCanvas.width = 320; offscreenCanvas.height = 240;
+                
+                // 確實清理舊緩衝
+                frameBuffer.forEach(f => f = null);
+                frameBuffer = [];
 
                 function processFrame() {
                     if (!document.getElementById('chkCamActive').checked) return;
-                    const tempCanvas = document.createElement('canvas'); tempCanvas.width = canvas.width; tempCanvas.height = canvas.height;
-                    tempCanvas.getContext('2d').drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-                    frameBuffer.push(tempCanvas);
+                    
+                    // 優化點：直接在全域的離屏畫布繪製，並快取輕量化的 ImageData 物件而非整個 Canvas DOM
+                    offscreenCtx.drawImage(videoEl, 0, 0, 320, 240);
+                    let imgData = offscreenCtx.getImageData(0, 0, 320, 240);
+                    frameBuffer.push(imgData);
                     
                     if (frameBuffer.length >= DELAY_FRAMES) {
                         lbl.innerHTML = "<span style='color:#2ecc71;'>🟢 25秒自拍動態回放已聯結</span>";
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        ctx.drawImage(frameBuffer.shift(), 0, 0);
+                        
+                        // 抽出最舊的一幀並渲染
+                        let oldestFrame = frameBuffer.shift();
+                        ctx.putImageData(oldestFrame, 0, 0);
+                        oldestFrame = null; // 手動切斷參照，幫助垃圾回收器(GC)極速清除
                     } else {
                         ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
                         ctx.fillStyle = "#e67e22"; ctx.fillRect(0, canvas.height - 6, (frameBuffer.length / DELAY_FRAMES) * canvas.width, 6);
@@ -472,14 +471,15 @@
                     camAnimationId = requestAnimationFrame(processFrame);
                 }
                 camAnimationId = requestAnimationFrame(processFrame);
-            }).catch(() => { 
+            }).catch((e) => { 
+                console.error(e);
                 lbl.textContent = "❌ 無法存取自拍相機"; 
                 document.getElementById('chkCamActive').checked = false;
             });
         } else {
             if (videoStream) { videoStream.getTracks().forEach(track => track.stop()); videoStream = null; }
             if (camAnimationId) { cancelAnimationFrame(camAnimationId); camAnimationId = null; }
-            frameBuffer = [];
+            frameBuffer.forEach(f => f = null); frameBuffer = [];
             ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
             lbl.textContent = "📷 鏡頭已關閉省電中";
         }
@@ -492,10 +492,7 @@
     function initPanZoomTarget() {
         const targetSvg = document.getElementById('archeryTarget');
         const holder = document.getElementById('svgHolder');
-
-        function applyTransform() {
-            targetSvg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-        }
+        function applyTransform() { targetSvg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`; }
 
         holder.addEventListener('touchstart', function(e) {
             if (e.touches.length === 2) {
@@ -504,8 +501,7 @@
             } else if (e.touches.length === 1) {
                 if (!document.getElementById('chkScoreMode').checked) {
                     isDragging = true;
-                    startX = e.touches[0].clientX - posX;
-                    startY = e.touches[0].clientY - posY;
+                    startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY;
                 }
             }
         }, { passive: true });
@@ -516,20 +512,14 @@
                 let rect = holder.getBoundingClientRect();
                 let midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
                 let midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-
                 let oldScale = scale;
                 let factor = dist / touchStartDist;
                 scale = Math.max(1, Math.min(4, scale * factor)); 
-
                 posX = midX - (midX - posX) * (scale / oldScale);
                 posY = midY - (midY - posY) * (scale / oldScale);
-
-                touchStartDist = dist;
-                applyTransform();
+                touchStartDist = dist; applyTransform();
             } else if (e.touches.length === 1 && isDragging) {
-                posX = e.touches[0].clientX - startX;
-                posY = e.touches[0].clientY - startY;
-                applyTransform();
+                posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY; applyTransform();
             }
         }, { passive: true });
 
@@ -548,12 +538,8 @@
             const svgY = ((e.clientY - rect.top) / rect.height) * 300;
             const distance = Math.sqrt(Math.pow(svgX - TARGET_CENTER, 2) + Math.pow(svgY - TARGET_CENTER, 2));
 
-            if (e.target.id !== "whiteTargetBackground" && e.target.tagName !== "circle" && e.target.tagName !== "rect") {
-                return;
-            }
-            if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) {
-                return; 
-            }
+            if (e.target.id !== "whiteTargetBackground" && e.target.tagName !== "circle" && e.target.tagName !== "rect") return;
+            if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) return; 
 
             let res = { score: 0, display: "M" }; 
             const RING_RADII = [
@@ -561,16 +547,11 @@
                 { r: 30, score: 9, display: "9" },   { r: 45, score: 8, display: "8" },
                 { r: 60, score: 7, display: "7" },   { r: 75, score: 6, display: "6" },
                 { r: 90, score: 5, display: "5" },   { r: 105, score: 4, display: "4" },
-                { r: 120, stroke: 3, display: "3" },  { r: 135, score: 2, display: "2" },
+                { r: 120, score: 3, display: "3" },  { r: 135, score: 2, display: "2" },
                 { r: 150, score: 1, display: "1" }
             ];
 
-            for (let zone of RING_RADII) { 
-                if (distance <= zone.r) { 
-                    res = zone; 
-                    break; 
-                } 
-            }
+            for (let zone of RING_RADII) { if (distance <= zone.r) { res = zone; break; } }
 
             fullRoundData[currentEnd][currentIndex] = { 
                 x: Math.max(0, Math.min(300, svgX)), y: Math.max(0, Math.min(300, svgY)), 
@@ -578,13 +559,10 @@
             };
             
             document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = res.display;
-            globalArrowCount++;
-            recalculateTotals();
-            handleLayerAndMetricsChange();
+            globalArrowCount++; recalculateTotals(); handleLayerAndMetricsChange();
 
             currentIndex++;
             if (currentIndex > 5) { currentIndex = 0; currentEnd++; }
-
             if (globalArrowCount >= TOTAL_ARROWS_LIMIT) {
                 const upBtn = document.getElementById('btnUpload'); upBtn.disabled = false; upBtn.style.opacity = "1";
                 upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
@@ -603,22 +581,14 @@
                 endArrows.forEach(a => { if (a) { allSelectedArrows.push(a); allScores.push(a.score); } });
             }
         });
-
         if (allSelectedArrows.length === 0) {
-            document.getElementById('mAccuracy').textContent = "--";
-            document.getElementById('mPrecision').textContent = "--";
-            document.getElementById('mStability').textContent = "--";
-            document.getElementById('mEndAvg').textContent = "--";
-            return;
+            document.getElementById('mAccuracy').textContent = "--"; document.getElementById('mPrecision').textContent = "--";
+            document.getElementById('mStability').textContent = "--"; document.getElementById('mEndAvg').textContent = "--"; return;
         }
-
         let totalDist = allSelectedArrows.reduce((sum, a) => sum + a.dist, 0);
         document.getElementById('mAccuracy').textContent = (totalDist / allSelectedArrows.length).toFixed(1) + "px";
-
-        let totalScoreSum = allScores.reduce((sum, s) => sum + s, 0);
-        let avgScore = totalScoreSum / allScores.length;
+        let totalScoreSum = allScores.reduce((sum, s) => sum + s, 0); let avgScore = totalScoreSum / allScores.length;
         document.getElementById('mEndAvg').textContent = avgScore.toFixed(2) + " 分";
-
         let variance = allScores.reduce((sum, s) => sum + Math.pow(s - avgScore, 2), 0) / allScores.length;
         document.getElementById('mStability').textContent = Math.sqrt(variance).toFixed(1);
 
@@ -627,11 +597,8 @@
             let globalX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length;
             let globalY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
             let worstIdx = 0; let maxD = -1;
-            coreArrows.forEach((a, i) => {
-                let d = Math.pow(a.x - globalX, 2) + Math.pow(a.y - globalY, 2); if (d > maxD) { maxD = d; worstIdx = i; }
-            });
+            coreArrows.forEach((a, i) => { let d = Math.pow(a.x - globalX, 2) + Math.pow(a.y - globalY, 2); if (d > maxD) { maxD = d; worstIdx = i; } });
             coreArrows.splice(worstIdx, 1);
-
             let newX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length;
             let newY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
             let maxSpread = Math.max(...coreArrows.map(a => Math.sqrt(Math.pow(a.x - newX, 2) + Math.pow(a.y - newY, 2))));
@@ -652,7 +619,6 @@
                 let allX = validArrows.reduce((sum, a) => sum + a.x, 0) / validArrows.length;
                 let allY = validArrows.reduce((sum, a) => sum + a.y, 0) / validArrows.length;
                 let maxSpread = Math.max(...validArrows.map(a => Math.sqrt(Math.pow(a.x - allX, 2) + Math.pow(a.y - allY, 2))));
-
                 const outerStorm = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                 outerStorm.setAttribute("cx", allX); outerStorm.setAttribute("cy", allY);
                 outerStorm.setAttribute("r", Math.max(maxSpread + 4, 15));
@@ -661,17 +627,12 @@
                 outerStorm.setAttribute("stroke-width", "0.8"); outerStorm.setAttribute("stroke-dasharray", "3,2");
                 clusterGroup.appendChild(outerStorm);
             }
-
             validArrows.forEach((arrow) => {
                 const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                 c.setAttribute("cx", arrow.x); c.setAttribute("cy", arrow.y); c.setAttribute("r", "3.5");
-                if (arrow.display === "M") {
-                    c.setAttribute("fill", "rgba(231, 76, 60, 0.8)"); c.setAttribute("stroke", "#ffaaaa");
-                } else {
-                    c.setAttribute("fill", STORM_COLORS[eIdx % 6].inner); c.setAttribute("stroke", "#fff");
-                }
-                c.setAttribute("stroke-width", "0.8");
-                arrowGroup.appendChild(c);
+                if (arrow.display === "M") { c.setAttribute("fill", "rgba(231, 76, 60, 0.8)"); c.setAttribute("stroke", "#ffaaaa"); } 
+                else { c.setAttribute("fill", STORM_COLORS[eIdx % 6].inner); c.setAttribute("stroke", "#fff"); }
+                c.setAttribute("stroke-width", "0.8"); arrowGroup.appendChild(c);
             });
         });
     }
@@ -692,7 +653,6 @@
         fullRoundData[currentEnd].pop(); globalArrowCount--;
         document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = "-";
         recalculateTotals(); handleLayerAndMetricsChange(); updateActiveHighlight();
-        
         if (globalArrowCount < TOTAL_ARROWS_LIMIT) {
             const upBtn = document.getElementById('btnUpload'); upBtn.disabled = true; upBtn.style.opacity = "0.4";
             upBtn.textContent = "💾 請先完成總箭數";
