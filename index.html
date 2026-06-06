@@ -5,55 +5,111 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>北辰射箭計分系統 v1.4.3</title>
     <style>
-        /* (CSS 樣式保持不變，略過以節省篇幅) */
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --gold: #ffd700; --text: #ffffff; --grid-border: #333; }
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 440px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 100%; max-width: 440px; box-sizing: border-box; }
         h3 { text-align: center; color: var(--gold); margin: 5px 0; }
-        .score-table-container { width: 100%; background: var(--card-bg); border-radius: 8px; overflow-y: auto; max-height: 130px; margin-bottom: 10px; }
+        .setup-overlay { background: var(--card-bg); border: 2px solid var(--gold); border-radius: 12px; padding: 15px; margin-bottom: 12px; text-align: center; }
+        .setup-overlay select, .setup-overlay input { background: #2b2b2b; color: white; border: 1px solid #444; padding: 6px; border-radius: 4px; margin: 5px; font-size: 14px; }
+        .score-table-container { width: 100%; background: var(--card-bg); border-radius: 8px; overflow-y: auto; max-height: 130px; margin-bottom: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
         table { width: 100%; border-collapse: collapse; text-align: center; font-size: 11px; }
         th, td { border: 1px solid var(--grid-border); padding: 4px 2px; }
         .active-cell { background-color: rgba(255, 215, 0, 0.25) !important; border: 2px solid var(--gold) !important; }
+        .end-total { background-color: #2d2d2d; font-weight: bold; color: #2ecc71; }
+        .tech-grid { display: grid; grid-template-columns: 110px 1fr; gap: 8px; width: 100%; margin-bottom: 10px; }
+        .timer-box { background: #000; border: 2px solid #333; border-radius: 8px; padding: 6px 0; display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; }
+        .timer-digital { font-size: 26px; font-weight: bold; color: #2ecc71; font-family: monospace; }
+        .metrics-box { background: #151f28; border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; justify-content: space-around; font-size: 11px; }
+        .svg-holder { width: 100%; max-width: 290px; height: 290px; background: #1a1a1a; border-radius: 8px; overflow: hidden; touch-action: none; margin: 0 auto; }
         .btn-group { display: flex; gap: 8px; margin-top: 10px; width: 100%; }
         button.action-btn { flex: 1; padding: 12px; font-size: 14px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; }
         .submit-btn { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; }
     </style>
 </head>
 <body>
+
 <div class="container">
     <h3>北辰射箭計分系統</h3>
-    <div class="score-table-container"><table><tbody id="scoreTableBody"></tbody></table></div>
+    <div id="setupPanel" class="setup-overlay">
+        <label style="font-weight: bold; color: var(--gold);">設定測驗規格</label><br>
+        選手 ID：<input type="text" id="cfgAthleteId" value="BC-001" style="width: 80px;"><br>
+        <button onclick="startSession()" style="margin-top:12px; padding:10px; width:90%; background: #e67e22; color:white; border:none; border-radius:6px;">🎯 開局！</button>
+    </div>
+
+    <div class="score-table-container">
+        <table>
+            <thead><tr><th>組</th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>本組</th><th>累計</th></tr></thead>
+            <tbody id="scoreTableBody"></tbody>
+        </table>
+    </div>
+
+    <div class="tech-grid">
+        <div class="timer-box" id="timerContainer">
+            <div id="timerDisplay" class="timer-digital">10</div>
+        </div>
+        <div class="metrics-box">
+            <div class="metric-line">🎯 當組偏移: <span id="mAccuracy">--</span></div>
+            <div class="metric-line">🧬 集中直徑: <span id="mPrecision">--</span></div>
+        </div>
+    </div>
+
+    <div class="svg-holder" id="svgHolder">
+        <svg id="archeryTarget" viewBox="0 0 300 300">
+            <rect id="whiteTargetBackground" x="0" y="0" width="300" height="300" fill="#ffffff"/>
+            <circle cx="150" cy="150" r="150" fill="none" stroke="#ccc" stroke-width="0.5"/>
+            <g id="arrowGroup"></g>
+        </svg>
+    </div>
+
     <div class="btn-group">
-        <button class="action-btn submit-btn" id="btnUpload" onclick="sendAllToSheets()">💾 同步至雲端資料庫</button>
+        <button class="action-btn" onclick="undoLastArrow()">↩️ 刪除上一箭</button>
+        <button class="action-btn submit-btn" id="btnUpload" onclick="sendAllToSheets()">💾 同步上傳</button>
     </div>
 </div>
 
 <script>
-    // 已更新為最新的 GAS 網址
     const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyX2AiQG_WWYzWJqIxbTJ3EeBaRvRk-CK7Ai3OnNsWvX4GpNMQMq9_vVGpFZu0U2w1JFQ/exec";
+    let fullRoundData = []; 
+    let currentEnd = 0, currentIndex = 0;
+
+    function startSession() {
+        fullRoundData = Array.from({ length: 12 }, () => []);
+        document.getElementById('setupPanel').style.display = 'none';
+        initTable();
+    }
+
+    function initTable() {
+        const tableBody = document.getElementById('scoreTableBody');
+        for (let e = 0; e < 12; e++) {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `<td>${e + 1}</td>` + Array(6).fill('<td>-</td>').join('') + '<td class="end-total">0</td><td>0</td>';
+            tableBody.appendChild(tr);
+        }
+    }
 
     async function sendAllToSheets() {
         const upBtn = document.getElementById('btnUpload');
         upBtn.disabled = true;
-        upBtn.textContent = "⚡ 傳輸中...";
-
-        // 測試連線
+        upBtn.textContent = "⚡ 同步中...";
+        
         try {
+            const payload = { athleteId: document.getElementById('cfgAthleteId').value, data: "test" };
             const response = await fetch(GAS_API_URL, {
                 method: "POST",
-                mode: "no-cors", // 嘗試使用 no-cors 模式規避跨域
                 headers: { "Content-Type": "text/plain" },
-                body: JSON.stringify({ action: "test" })
+                body: JSON.stringify(payload)
             });
-            alert("✅ 連線成功！Google 後端已接收到訊號。");
-        } catch (err) {
-            console.error("錯誤細節:", err);
-            alert("❌ 同步失敗，請查看瀏覽器 F12 Console 錯誤訊息。");
+            const result = await response.json();
+            alert("同步結果: " + JSON.stringify(result));
+        } catch (e) {
+            alert("同步失敗，請確認網路與 GAS 設定");
         } finally {
             upBtn.disabled = false;
-            upBtn.textContent = "💾 同步至雲端資料庫";
+            upBtn.textContent = "💾 同步上傳";
         }
     }
+
+    function undoLastArrow() { /* 刪除邏輯 */ }
 </script>
 </body>
 </html>
