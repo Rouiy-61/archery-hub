@@ -6,160 +6,122 @@
     <title>北辰射箭計分系統 v1.4.3 完整版</title>
     <style>
         :root { --bg-color: #121212; --card-bg: #1e1e1e; --gold: #ffd700; --text: #ffffff; --grid-border: #333; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
+        body { font-family: sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
         .container { width: 100%; max-width: 440px; box-sizing: border-box; }
-        h3 { text-align: center; color: var(--gold); margin: 5px 0; }
-        .setup-overlay { background: var(--card-bg); border: 2px solid var(--gold); border-radius: 12px; padding: 15px; margin-bottom: 12px; text-align: center; }
-        .setup-overlay select, .setup-overlay input { background: #2b2b2b; color: white; border: 1px solid #444; padding: 6px; border-radius: 4px; margin: 5px; font-size: 14px; }
-        .score-table-container { width: 100%; background: var(--card-bg); border-radius: 8px; overflow-y: auto; max-height: 130px; margin-bottom: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
-        table { width: 100%; border-collapse: collapse; text-align: center; font-size: 11px; }
-        th, td { border: 1px solid var(--grid-border); padding: 4px 2px; }
-        th { background-color: #2a2a2a; color: #aaa; }
-        .active-cell { background-color: rgba(255, 215, 0, 0.25) !important; border: 2px solid var(--gold) !important; }
-        .end-total { background-color: #2d2d2d; font-weight: bold; color: #2ecc71; }
-        .tech-grid { display: grid; grid-template-columns: 110px 1fr; gap: 8px; width: 100%; margin-bottom: 10px; }
-        .timer-box { background: #000; border: 2px solid #333; border-radius: 8px; padding: 6px 0; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
-        .timer-digital { font-size: 26px; font-weight: bold; color: #2ecc71; font-family: monospace; }
-        .timer-status { font-size: 9px; color: #aaa; text-align: center; }
-        .metrics-box { background: #151f28; border-radius: 8px; padding: 6px 8px; font-size: 11px; cursor: pointer; }
-        .metric-line { margin: 1px 0; }
-        .metric-line span { color: var(--gold); font-weight: bold; float: right; }
-        .svg-holder { width: 100%; max-width: 290px; height: 290px; margin: 0 auto; background: #1a1a1a; border-radius: 8px; touch-action: none; position: relative; }
-        svg { width: 100%; height: 100%; transform-origin: 0px 0px; }
-        .control-mode-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-        .btn-toggle-ctl { background: #1e1e1e; padding: 8px; border: 1px solid #555; border-radius: 5px; font-size: 11px; text-align: center; cursor: pointer; }
-        .btn-group { display: flex; gap: 8px; margin-top: 10px; }
-        button.action-btn { flex: 1; padding: 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: bold; color: white; }
-        .submit-btn { background: linear-gradient(135deg, #2ecc71, #27ae60); }
+        .setup-overlay { background: var(--card-bg); border: 2px solid var(--gold); padding: 15px; border-radius: 12px; text-align: center; }
+        .score-table-container { width: 100%; background: var(--card-bg); border-radius: 8px; margin: 10px 0; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; }
+        th, td { border: 1px solid var(--grid-border); padding: 5px; }
+        .svg-holder { width: 100%; max-width: 300px; height: 300px; margin: 10px auto; background: #1a1a1a; border-radius: 8px; cursor: crosshair; }
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        button { flex: 1; padding: 12px; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; }
+        .submit-btn { background: #2ecc71; }
         .back-btn { background: #333; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h3>北辰射箭計分系統</h3>
     <div id="setupPanel" class="setup-overlay">
-        <label>🛠️ 規格設定</label><br>
-        選手ID：<input type="text" id="cfgAthleteId" value="BC-001" style="width: 80px;"><br>
-        箭數：<select id="cfgTotalArrows"><option value="36">36 箭</option><option value="72" selected>72 箭</option></select><br>
-        <button onclick="startSession()" style="width:90%; padding:10px; background:#e67e22; color:white; border:none; border-radius:6px; cursor:pointer;">🎯 開始測驗</button>
+        <h3>北辰射箭計分系統</h3>
+        選手姓名：<input type="text" id="cfgUserId" value="選手"><br>
+        <button onclick="startSession()" style="margin-top:10px; width:100%; background:#e67e22;">🎯 開始測驗</button>
     </div>
 
     <div class="score-table-container">
         <table>
-            <thead><tr><th>組</th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>本組</th><th>累計</th></tr></thead>
+            <thead><tr><th>組</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>總分</th></tr></thead>
             <tbody id="scoreTableBody"></tbody>
         </table>
     </div>
 
-    <div class="tech-grid">
-        <div class="timer-box" onclick="toggleTimer()">
-            <div id="timerDisplay" class="timer-digital">10</div>
-            <div id="timerStatus" class="timer-status">⏱️ 點擊啟動</div>
-        </div>
-        <div class="metrics-box">
-            <div class="metric-line">🎯 偏移: <span id="mAccuracy">--</span></div>
-            <div class="metric-line">🧬 集中: <span id="mPrecision">--</span></div>
-            <div class="metric-line">📊 均值: <span id="mEndAvg">--</span></div>
-        </div>
-    </div>
-
     <div class="svg-holder" id="svgHolder">
-        <svg id="archeryTarget" viewBox="0 0 300 300">
-            <rect x="0" y="0" width="300" height="300" fill="#ffffff" id="whiteTargetBackground"/>
-            <circle cx="150" cy="150" r="150" fill="none" stroke="#ccc" stroke-width="1"/>
-            <circle cx="150" cy="150" r="75" fill="none" stroke="#0099cc" stroke-width="1"/>
-            <circle cx="150" cy="150" r="30" fill="none" stroke="#e6b800" stroke-width="1"/>
-            <g id="clusterLayerGroup"></g>
+        <svg id="archeryTarget" viewBox="0 0 300 300" width="300" height="300">
+            <rect x="0" y="0" width="300" height="300" fill="#ffffff"/>
+            <circle cx="150" cy="150" r="150" fill="none" stroke="#000" stroke-width="1"/>
             <g id="arrowGroup"></g>
         </svg>
     </div>
 
-    <div class="control-mode-bar">
-        <label class="btn-toggle-ctl"><input type="checkbox" id="chkScoreMode"> 📌 點靶模式</label>
-        <button class="btn-toggle-ctl" onclick="alert('錄影功能已就緒')">📷 錄影待命</button>
-    </div>
-
     <div class="btn-group">
-        <button class="action-btn back-btn" onclick="undoLastArrow()">↩️ 刪除上一箭</button>
-        <button class="action-btn submit-btn" id="btnUpload" onclick="sendAllToSheets()" disabled>💾 準備上傳</button>
+        <button class="back-btn" onclick="undoLastArrow()">↩️ 刪除</button>
+        <button class="submit-btn" id="btnUpload" onclick="sendAllToSheets()">💾 上傳雲端</button>
     </div>
 </div>
 
 <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzg_PFt2oDBDL8Bboegje5nzpL5zdHuzGsBVyKOXKm9TgWSaFovkeeifm9_EZy0l8RaYw/exec";
-    let fullRoundData = [], currentEnd = 0, currentIndex = 0, globalArrowCount = 0, TOTAL_ARROWS_LIMIT = 72, TOTAL_ROWS = 12;
+    // ⚠️ 請填入您最新的 GAS 網址
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbyiTShlrYsDgAoZYCf0gigE81B720-WRy-U4WaTo6Laww6EWM_SXqDCwZu5LlO27KUGzg/exec";
+    let dataStore = Array.from({length: 12}, () => []), currentEnd = 0, currentIndex = 0;
 
-    function startSession() {
-        TOTAL_ARROWS_LIMIT = parseInt(document.getElementById('cfgTotalArrows').value);
-        TOTAL_ROWS = TOTAL_ARROWS_LIMIT / 6;
-        fullRoundData = Array.from({ length: TOTAL_ROWS }, () => []);
-        document.getElementById('setupPanel').style.display = 'none';
-        initTable();
-    }
+    function startSession() { document.getElementById('setupPanel').style.display = 'none'; initTable(); }
 
     function initTable() {
-        const tbody = document.getElementById('scoreTableBody'); tbody.innerHTML = "";
-        for (let e = 0; e < TOTAL_ROWS; e++) {
-            tbody.innerHTML += `<tr><td style="background:#252525;">${e+1}</td>${[0,1,2,3,4,5].map(a => `<td id="cell-${e}-${a}">-</td>`).join('')}<td class="end-total" id="endTotal-${e}">0</td><td id="runTotal-${e}">0</td></tr>`;
+        const tbody = document.getElementById('scoreTableBody');
+        for (let i = 0; i < 12; i++) {
+            tbody.innerHTML += `<tr><td>${i+1}</td>${[0,1,2,3,4,5].map(a => `<td id="cell-${i}-${a}">-</td>`).join('')}<td id="total-${i}">0</td></tr>`;
         }
     }
 
     document.getElementById('archeryTarget').addEventListener('pointerdown', function(e) {
-        if (!document.getElementById('chkScoreMode').checked || globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
         const rect = this.getBoundingClientRect();
         const x = ((e.clientX - rect.left) / rect.width) * 300;
         const y = ((e.clientY - rect.top) / rect.height) * 300;
         const dist = Math.sqrt(Math.pow(x-150, 2) + Math.pow(y-150, 2));
-        
-        let score = Math.max(0, 11 - Math.ceil(dist / 15));
-        fullRoundData[currentEnd][currentIndex] = {x, y, score, dist};
-        document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = score;
-        
-        globalArrowCount++; currentIndex++;
-        if (currentIndex > 5) { currentIndex = 0; currentEnd++; }
-        recalculate(); renderArrows();
-    });
+        const score = Math.max(0, 10 - Math.floor(dist/15));
 
-    function recalculate() {
-        let total = 0;
-        fullRoundData.forEach((end, i) => {
-            let sum = end.reduce((a, b) => a + (b ? b.score : 0), 0);
-            total += sum;
-            document.getElementById(`endTotal-${i}`).textContent = sum;
-            document.getElementById(`runTotal-${i}`).textContent = total;
-        });
-        if (globalArrowCount >= TOTAL_ARROWS_LIMIT) {
-            const btn = document.getElementById('btnUpload');
-            btn.disabled = false; btn.textContent = "💾 上傳資料";
+        if (currentEnd < 12) {
+            dataStore[currentEnd][currentIndex] = {x, y, score};
+            document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = score;
+            renderArrows();
+            currentIndex++;
+            if (currentIndex > 5) { currentIndex = 0; currentEnd++; }
+            updateTotals();
         }
-    }
+    });
 
     function renderArrows() {
         const g = document.getElementById('arrowGroup'); g.innerHTML = "";
-        fullRoundData.flat().forEach(a => {
-            if (!a) return;
+        dataStore.flat().forEach(a => {
             const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            c.setAttribute("cx", a.x); c.setAttribute("cy", a.y); c.setAttribute("r", "4"); c.setAttribute("fill", "#fff");
+            c.setAttribute("cx", a.x); c.setAttribute("cy", a.y); c.setAttribute("r", "4"); c.setAttribute("fill", "#000");
             g.appendChild(c);
         });
     }
 
+    function updateTotals() {
+        dataStore.forEach((end, i) => {
+            document.getElementById(`total-${i}`).textContent = end.reduce((a, b) => a + b.score, 0);
+        });
+    }
+
     function undoLastArrow() {
-        if (globalArrowCount > 0) {
-            globalArrowCount--; currentIndex--;
-            if (currentIndex < 0) { currentIndex = 5; currentEnd--; }
-            fullRoundData[currentEnd][currentIndex] = null;
+        if (currentIndex > 0 || currentEnd > 0) {
+            if (currentIndex === 0) { currentIndex = 5; currentEnd--; } else { currentIndex--; }
+            dataStore[currentEnd][currentIndex] = null;
             document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = "-";
-            recalculate(); renderArrows();
+            updateTotals(); renderArrows();
         }
     }
 
-    function sendAllToSheets() {
-        alert("資料庫連結中..."); // 實際與 GAS 溝通邏輯
+    async function sendAllToSheets() {
+        const btn = document.getElementById('btnUpload');
+        btn.textContent = "傳送中...";
+        try {
+            const res = await fetch(GAS_API_URL, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    athleteId: "BC-001",
+                    userId: document.getElementById('cfgUserId').value,
+                    data: dataStore
+                })
+            });
+            alert("資料同步成功！");
+        } catch (e) {
+            alert("同步失敗，請檢查網路連線或 CORS 部署設定。");
+        } finally { btn.textContent = "💾 上傳雲端"; }
     }
-
-    function toggleTimer() { alert("計時器啟動"); }
 </script>
 </body>
 </html>
