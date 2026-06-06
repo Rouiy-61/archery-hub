@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>北辰射箭紀錄表 v1.3.6</title>
+    <title>北辰射箭紀錄表 v1.3.7</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -18,7 +18,7 @@
             margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center;
             position: relative;
         }
-        .container { width: 100%; max-width: 440px; box-sizing: border-box; }
+        .container { width: 100%; max-width: 440px; box-sizing: border-box; display: flex; flex-direction: column; }
         h3 { text-align: center; color: var(--gold); margin: 5px 0; }
 
         /* 初始設定面板 */
@@ -80,18 +80,24 @@
         .main-display-zone {
             width: 100%; background: var(--card-bg); border-radius: 12px;
             padding: 10px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center;
-            position: relative; overflow: hidden; min-height: 345px;
+            position: relative; overflow: hidden; min-height: 380px;
         }
         
-        /* 靶紙視窗 */
+        /* 靶紙外圍遮罩容器：確保內部放大時，絕對不溢出、不撐開、不擋到外面的按鈕 */
         #targetWrapper {
             width: 100%; display: flex; flex-direction: column; align-items: center;
-            overflow: hidden; touch-action: none; position: relative;
+            overflow: hidden; position: relative;
         }
+        /* 視窗內部的局部縮放區域 */
         .svg-holder {
-            width: 100%; max-width: 290px; height: auto; position: relative; overflow: visible;
+            width: 100%; max-width: 290px; height: 290px; position: relative; overflow: hidden; 
+            background: #1a1a1a; border-radius: 8px; touch-action: none;
         }
-        svg { width: 100%; height: auto; border-radius: 50%; transform-origin: center center; }
+        svg { 
+            width: 100%; height: 100%; 
+            transform-origin: 0px 0px; /* 改為動態矩陣原點，配合局部聚焦縮放 */
+            transition: transform 0.05s ease-out;
+        }
 
         /* 錄影視窗 */
         #videoWrapper {
@@ -100,18 +106,18 @@
         #camCanvas { width: 100%; max-width: 320px; height: 240px; background: #000; border-radius: 8px; border: 1px solid #444; transform: scaleX(-1); }
         .cam-status-lbl { font-size: 11px; margin-top: 6px; color: #ff3333; display: flex; align-items: center; gap: 4px; }
         
-        /* 💡 錄影畫面專屬的一鍵返回靶紙按鈕 */
+        /* 錄影畫面專屬的一鍵返回靶紙按鈕 */
         .btn-return-target {
             width: 100%; max-width: 320px; background: linear-gradient(135deg, #2ecc71, #27ae60);
             color: white; border: none; padding: 10px; font-size: 13px; font-weight: bold;
             border-radius: 6px; margin-bottom: 8px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
 
-        /* 控制開關與切換列 */
+        /* 控制開關與切換列（永遠位於靶紙容器下方，不受靶紙放大影響） */
         .control-mode-bar {
             width: 100%; background: #252a30; padding: 10px 6px; border-radius: 8px;
             margin-top: 10px; font-size: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-            border: 1px solid #3a4454; box-sizing: border-box;
+            border: 1px solid #3a4454; box-sizing: border-box; z-index: 10;
         }
         .btn-toggle-ctl {
             display: flex; align-items: center; justify-content: center; gap: 4px;
@@ -147,7 +153,7 @@
 <body>
 
 <div class="container">
-    <h3>北辰射箭紀錄表</h3>
+    <h3>北辰射箭國際雙階運科板</h3>
     
     <div id="setupPanel" class="setup-overlay">
         <label style="font-weight: bold; color: var(--gold);">🛠️ 本局測驗與計時規格設定</label><br>
@@ -160,7 +166,7 @@
         </select><br>
         預備：<input type="number" id="cfgPrepSec" value="10" style="width: 40px;"> 秒 ｜ 
         射擊：<input type="number" id="cfgShootSec" value="90" style="width: 40px;"> 秒
-        <button onclick="startSession()" style="margin-top:10px; padding:8px; width:90%; font-size:13px; font-weight:bold;">🎯 開局解鎖音訊通道</button>
+        <button onclick="startSession()" style="margin-top:10px; padding:10px; width:90%; font-size:15px; font-weight:bold; background: linear-gradient(135deg, #e67e22, #d35400); color:white; border:none; border-radius:6px; cursor:pointer;">🎯 開局！</button>
     </div>
 
     <div class="score-table-container">
@@ -184,17 +190,17 @@
         </div>
         
         <div class="metrics-box" onclick="toggleDescPanel()">
-            <div class="metric-line">🎯 篩選偏移: <span id="mAccuracy">--</span></div>
-            <div class="metric-line">🧬 篩選直徑: <span id="mPrecision">--</span></div>
-            <div class="metric-line">⚡ 篩選起伏: <span id="mStability">--</span></div>
+            <div class="metric-line">🎯 當組偏移: <span id="mAccuracy">--</span></div>
+            <div class="metric-line">🧬 集中直徑: <span id="mPrecision">--</span></div>
+            <div class="metric-line">⚡ 穩定起伏: <span id="mStability">--</span></div>
         </div>
     </div>
 
     <div id="descPanel" class="desc-panel">
         <strong>📊 射箭運動科學指標說明：</strong><br>
-        • <strong>篩選偏移 (Accuracy)：</strong>箭著點與絕對靶心的平均距離。數值越低，代表瞄具校正越精準。<br>
-        • <strong>篩選直徑 (Precision)：</strong>剔除單支最遠離群箭後的核心密集度。數值越小，代表技術動作重複性極高。<br>
-        • <strong>篩選起伏 (Stability)：</strong>環數分數的標準差。用來量化射手在該趟中技術與心理耐受度的起伏落差。
+        • <strong>當組偏移 (Accuracy)：</strong>箭著點與絕對靶心的平均距離。數值越低，代表瞄具校正越精準。<br>
+        • <strong>集中直徑 (Precision)：</strong>剔除單支最遠離群箭後的核心密集度。數值越小，代表技術動作重複性極高。<br>
+        • <strong>穩定起伏 (Stability)：</strong>環數分數的標準差。用來量化射手在該趟中技術與心理耐受度的起伏落差。
     </div>
 
     <div class="main-display-zone">
@@ -248,7 +254,7 @@
 
     <div class="system-footer">
         NORTH STAR ARCHERY LAB SYSTEM © 2026<br>
-        DESIGNED BY ROY | VERSION 1.3.6 運科專精版
+        DESIGNED BY ROY | VERSION 1.3.7 局部聚焦縮放版
     </div>
 </div>
 
@@ -273,6 +279,7 @@
         { inner: "rgba(241, 196, 15, 0.45)", outer: "rgba(241, 196, 15, 0.12)" }
     ];
 
+    // 優化版音效控制器
     function playBeep(type) {
         try {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -280,24 +287,23 @@
             let osc = audioCtx.createOscillator();
             let gainNode = audioCtx.createGain();
             osc.connect(gainNode); gainNode.connect(audioCtx.destination);
-            gainNode.gain.setValueAtTime(1.0, audioCtx.currentTime);
+            gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
 
             if (type === 'long') {
                 osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-                osc.start(); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.2);
-                osc.stop(audioCtx.currentTime + 1.2);
+                osc.start(); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.5);
+                osc.stop(audioCtx.currentTime + 1.5);
             } else {
-                osc.type = 'square'; osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
-                osc.start(); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
-                osc.stop(audioCtx.currentTime + 0.25);
+                osc.type = 'square'; osc.frequency.setValueAtTime(950, audioCtx.currentTime);
+                osc.start(); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.stop(audioCtx.currentTime + 0.2);
             }
         } catch(e) {}
     }
 
     function startSession() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        playBeep('short');
-
+        
         TOTAL_ARROWS_LIMIT = parseInt(document.getElementById('cfgTotalArrows').value);
         TOTAL_ROWS = TOTAL_ARROWS_LIMIT / 6;
         fullRoundData = Array.from({ length: TOTAL_ROWS }, () => []);
@@ -359,7 +365,6 @@
         }
     }
 
-    // 💡 錄影畫面的綠色按鈕點擊時，直接強制切回計分靶紙
     function forceReturnToTarget() {
         if (currentView === "VIDEO") { switchMainView(); }
     }
@@ -373,6 +378,8 @@
     }
 
     let timerInterval = null; let timerState = "IDLE"; let currentSeconds = 0;
+    
+    // 核心計時與特殊逼聲系統
     function toggleTimer() {
         const box = document.getElementById('timerContainer');
         const disp = document.getElementById('timerDisplay');
@@ -383,27 +390,34 @@
             box.className = "timer-box"; status.innerHTML = "⏸️ 已暫停<br>點擊續傳";
         } else {
             if (currentSeconds <= 0) {
+                // 開始預備階段
                 timerState = "PREP"; currentSeconds = parseInt(document.getElementById('cfgPrepSec').value);
                 box.className = "timer-box prep-phase"; disp.style.color = "#ff3333";
                 status.innerHTML = "🔴 預備中<br>請勿起弓";
-                playBeep('short');
+                playBeep('short'); // 預備起步逼一聲
             } else {
                 timerState = (box.classList.contains("shoot-phase")) ? "SHOOT" : "PREP";
             }
 
             timerInterval = setInterval(() => {
                 currentSeconds--; disp.textContent = currentSeconds;
-                if(currentSeconds <= 10 && currentSeconds > 0) { playBeep('short'); }
+
+                // 射擊階段倒數 10 秒內（包含10秒）每秒逼一聲
+                if (timerState === "SHOOT" && currentSeconds <= 10 && currentSeconds > 0) { 
+                    playBeep('short'); 
+                }
 
                 if (timerState === "PREP" && currentSeconds <= 0) {
+                    // 進入正式射擊階段
                     timerState = "SHOOT"; currentSeconds = parseInt(document.getElementById('cfgShootSec').value);
                     box.className = "timer-box shoot-phase"; disp.style.color = "#2ecc71";
                     status.innerHTML = "🏹 射擊中<br>計時獨立";
-                    playBeep('long');
+                    // 進入射擊不每秒叫，保持安靜
                 } else if (timerState === "SHOOT" && currentSeconds <= 0) {
+                    // 時間截止歸零
                     clearInterval(timerInterval); timerState = "IDLE"; box.className = "timer-box";
                     disp.style.color = "#ff3333"; status.innerHTML = "🛑 時間到";
-                    playBeep('long'); playBeep('long');
+                    playBeep('long'); // 歸零長逼一聲
                 }
             }, 1000);
         }
@@ -456,68 +470,78 @@
         }
     }
 
-    // 拖曳縮放與點靶邏輯
+    // 💡 全新優化的局部中心聚焦拖曳與雙指縮放演算法
     let scale = 1, posX = 0, posY = 0;
-    let isDragging = false; let startX, startY;
+    let isDragging = false; let startX = 0, startY = 0;
     let touchStartDist = 0;
 
     function initPanZoomTarget() {
         const targetSvg = document.getElementById('archeryTarget');
         const holder = document.getElementById('svgHolder');
 
+        function applyTransform() {
+            targetSvg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        }
+
         holder.addEventListener('touchstart', function(e) {
-            // 💡 關鍵變動：不開啟計分時，允許隨意拖曳縮放
-            if (!document.getElementById('chkScoreMode').checked) {
-                if (e.touches.length === 2) {
-                    touchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-                } else if (e.touches.length === 1) {
-                    isDragging = true;
-                    startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY;
-                }
-                return;
-            }
-            // 開啟計分時，雙指依舊可縮放
+            // 無論是否開啟計分，雙指操作都視為縮放與聚焦平移
             if (e.touches.length === 2) {
+                isDragging = false;
                 touchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+            } else if (e.touches.length === 1) {
+                // 如果沒開啟計分，單指直接觸發畫面拖曳平移
+                if (!document.getElementById('chkScoreMode').checked) {
+                    isDragging = true;
+                    startX = e.touches[0].clientX - posX;
+                    startY = e.touches[0].clientY - posY;
+                }
             }
-        });
+        }, { passive: true });
 
         holder.addEventListener('touchmove', function(e) {
             if (e.touches.length === 2 && touchStartDist > 0) {
                 let dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                
+                // 計算兩指中心點在 holder 內的局部相對座標，以此處為縮放核心，防止靶面亂飛
+                let rect = holder.getBoundingClientRect();
+                let midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+                let midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+
+                let oldScale = scale;
                 let factor = dist / touchStartDist;
                 scale = Math.max(1, Math.min(4, scale * factor)); 
+
+                // 根據聚焦中心點修正平移量
+                posX = midX - (midX - posX) * (scale / oldScale);
+                posY = midY - (midY - posY) * (scale / oldScale);
+
                 touchStartDist = dist;
+                applyTransform();
             } else if (e.touches.length === 1 && isDragging) {
-                // 💡 只有在「關閉計分」或是「非點靶觸發」下進行平移
-                if (!document.getElementById('chkScoreMode').checked) {
-                    posX = e.touches[0].clientX - startX;
-                    posY = e.touches[0].clientY - startY;
-                    let maxPan = 150 * (scale - 1);
-                    posX = Math.max(-maxPan, Math.min(maxPan, posX));
-                    posY = Math.max(-maxPan, Math.min(maxPan, posY));
-                }
+                posX = e.touches[0].clientX - startX;
+                posY = e.touches[0].clientY - startY;
+                applyTransform();
             }
-            targetSvg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-        });
+        }, { passive: true });
 
         holder.addEventListener('touchend', function(e) {
-            isDragging = false; if (e.touches.length < 2) touchStartDist = 0;
+            if (e.touches.length < 2) touchStartDist = 0;
+            if (e.touches.length === 0) isDragging = false;
         });
 
-        // 點擊記分判定
+        // 點擊記分與防誤觸判定
         targetSvg.addEventListener('pointerdown', function(e) {
-            // 💡 核心優化：未開啟計分開關，整個靶面範圍全部安全放行，不進行計分處理
             if (!document.getElementById('chkScoreMode').checked) return;
             if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
 
+            // 精確逆向計算出當前縮放平移矩陣下，真實點擊在 300x300 靶面上的 SVG 內部幾何座標
             const rect = targetSvg.getBoundingClientRect();
             const svgX = ((e.clientX - rect.left) / rect.width) * 300;
             const svgY = ((e.clientY - rect.top) / rect.height) * 300;
             const distance = Math.sqrt(Math.pow(svgX - TARGET_CENTER, 2) + Math.pow(svgY - TARGET_CENTER, 2));
 
-            // 開啟計分時，點擊超出白色 1 環外圈（安全防誤觸區）則不予計分
-            if (distance > 150) { return; }
+            // 開啟計分時，如果點到 1 環外圈（白色半徑 150 以外的黑框無效區），不計分
+            if (distance > 150) return;
 
             let res = { score: 0, display: "M" };
             const RING_RADII = [
