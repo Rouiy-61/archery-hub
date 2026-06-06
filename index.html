@@ -265,8 +265,7 @@
 <video id="hiddenVideo" autoplay muted playsinline style="display:none;"></video>
 
 <script>
-    // 🎯 這裡已經成功對接你提供的最新 GAS 網頁應用程式網址
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzxlQAm526oL5zGjwwQ2g2Dy4WxsBAhGnBJQzSZ3O2QypmWPmf-uKKpipZVi9Jk6wBJPA/exec"; 
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwodA__vj2ZrnbR21Rj79KtG1aXpiJbbb6DbHlbEeAPb-D_SsW6DQ-vhCRqIxFYYwOwNg/exec"; 
 
     let TOTAL_ROWS = 0; let TOTAL_ARROWS_LIMIT = 0;
     const TARGET_CENTER = 150;
@@ -402,7 +401,6 @@
         }
     }
 
-    // 🧠 記憶體防卡死極速錄影引擎
     let videoStream = null; let camAnimationId = null; let frameBuffer = [];
     const DELAY_FRAMES = 25 * 24; 
     let offscreenCanvas = document.createElement('canvas'); let offscreenCtx = offscreenCanvas.getContext('2d');
@@ -478,7 +476,7 @@
             const RING_RADII = [
                 { r: 7.5, score: 10, display: "X" }, { r: 15, score: 10, display: "10" }, { r: 30, score: 9, display: "9" },   
                 { r: 45, score: 8, display: "8" },   { r: 60, score: 7, display: "7" },   { r: 75, score: 6, display: "6" },   
-                { r: 90, score: 5, display: "5" },   { r: 105, score: 4, display: "4" },  { r: 120, score: 3, display: "3" },  
+                { r: 90, score: 5, display: "5" },   { r: 105, score: 4, display: "4" },  { r: 120, stroke: 3, display: "3" },  
                 { r: 135, score: 2, display: "2" },  { r: 150, score: 1, display: "1" }
             ];
             for (let zone of RING_RADII) { if (distance <= zone.r) { res = zone; break; } }
@@ -555,7 +553,6 @@
         }
     }
 
-    // 🌐 智慧多媒體非同步採集器 A：將 SVG 靶紙壓製為 Base64 圖片
     function getStormImageBase64() {
         const svgElement = document.getElementById('archeryTarget'); const serializer = new XMLSerializer();
         let svgString = serializer.serializeToString(svgElement);
@@ -566,7 +563,6 @@
         });
     }
 
-    // 📹 智慧多媒體非同步採集器 B：將 ImageData 快取記憶體高速壓製為 WebM 延時影片檔
     function getRecordedVideoBase64() {
         return new Promise((resolve) => {
             if (frameBuffer.length === 0) { resolve(null); return; }
@@ -594,53 +590,70 @@
         });
     }
 
-    // 🚀 運科多媒體資料流同步引擎 (支援 選手ID 傳輸)
     async function sendAllToSheets() {
         const upBtn = document.getElementById('btnUpload');
         upBtn.disabled = true; upBtn.style.opacity = "0.5";
         upBtn.textContent = "⚡ 運科多媒體打包中 (請勿關閉網頁)...";
 
-        // 1. 採集智慧風暴圖與 25 秒時空影片
         const stormImgData = await getStormImageBase64();
         const videoData = await getRecordedVideoBase64();
 
-        let promises = [];
-        
-        fullRoundData.forEach((endArrows, index) => {
-            if (endArrows.length === 0) return;
+        let sharedVideoUrl = "無影片";
+        let uploadSuccess = true;
+
+        for (let index = 0; index < fullRoundData.length; index++) {
+            let endArrows = fullRoundData[index];
+            if (!endArrows || endArrows.length === 0) continue;
+
+            upBtn.textContent = `⚡ 正在同步第 ${index + 1} / ${fullRoundData.length} 趟數據...`;
+
             let endScore = endArrows.reduce((sum, a) => sum + a.score, 0);
             let arrowDataString = endArrows.map((a, i) => `${a.score}|${Math.round(a.x-TARGET_CENTER)},${Math.round(a.y-TARGET_CENTER)}|${i+1}`).join('#');
             let packedArrows = `100|0,0|0$${arrowDataString}`;
 
-            // 打包符合 GAS 升級版定義的數據封裝
             let payload = {
                 action: "save_training_v3",
-                athleteId: GLOBAL_ATHLETE_ID,  // 🎯 新增傳送選手ID
-                userId: GLOBAL_USER_NAME,       // 傳送選手姓名
+                athleteId: GLOBAL_ATHLETE_ID,
+                userId: GLOBAL_USER_NAME,
                 endNumber: index + 1,
                 endScore: endScore,
                 packedArrows: packedArrows,
                 stormImageBase64: stormImgData,
-                videoBase64: videoData
+                videoBase64: (sharedVideoUrl === "無影片") ? videoData : null, 
+                videoUrlPrevious: sharedVideoUrl
             };
 
-            promises.push(
-                fetch(GAS_API_URL, {
+            try {
+                let response = await fetch(GAS_API_URL, {
                     method: "POST",
-                    headers: { "Content-Type": "text/plain" }, // 使用 text/plain 全速通行
+                    headers: { "Content-Type": "text/plain" },
                     body: JSON.stringify(payload)
-                })
-            );
-        });
+                });
+                let resJson = await response.json();
+                
+                if (resJson.status === "success") {
+                    if (resJson.videoUrl && resJson.videoUrl !== "無影片") {
+                        sharedVideoUrl = resJson.videoUrl; 
+                    }
+                } else {
+                    console.error("GAS 後端錯誤:", resJson.message);
+                    uploadSuccess = false;
+                    break;
+                }
+            } catch (err) {
+                console.error("網路傳輸失敗:", err);
+                uploadSuccess = false;
+                break;
+            }
+        }
 
-        Promise.all(promises).then(() => {
-            alert(`🎉 運科大數據同步成功！教練已可在試算表中查看【選手ID: ${GLOBAL_ATHLETE_ID}】的風暴圖與 25 秒動作回放！`);
+        if (uploadSuccess) {
+            alert(`🎉 運科大數據同步成功！教練已可在試算表中查看【選手ID: ${GLOBAL_ATHLETE_ID}】的完整智慧風暴圖與延時技術回放！`);
             location.reload();
-        }).catch((err) => {
-            console.error(err);
-            alert("同步失敗，請檢查網路連線或 GAS 雲端流量限制。");
+        } else {
+            alert("同步失敗，可能原因：\n1. 影片檔案過大導致連線超時\n2. 您的 Google 雲端硬碟當日API寫入檔案限制額度已達上限。\n\n💡 提示：明天配額重置後即可正常運作。如欲立刻測試純數據，可於下趟嘗試將『錄影鏡頭』關閉後上傳。");
             upBtn.disabled = false; upBtn.style.opacity = "1"; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
-        });
+        }
     }
 </script>
 </body>
