@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>北辰射箭紀錄表 v1.3.8</title>
+    <title>北辰射箭計分系統 v1.3.9</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -63,11 +63,11 @@
 
         /* 運科指標點擊區域 */
         .metrics-box {
-            background: #151f28; border-radius: 8px; padding: 8px;
-            display: flex; flex-direction: column; justify-content: space-around; font-size: 12px; cursor: pointer;
+            background: #151f28; border-radius: 8px; padding: 6px 8px;
+            display: flex; flex-direction: column; justify-content: space-around; font-size: 11px; cursor: pointer;
         }
         .metrics-box:hover { background: #1c2a36; }
-        .metric-line { margin: 2px 0; }
+        .metric-line { margin: 1px 0; }
         .metric-line span { color: var(--gold); font-weight: bold; float: right; }
 
         /* 反轉說明面板 */
@@ -88,7 +88,7 @@
             width: 100%; display: flex; flex-direction: column; align-items: center;
             overflow: hidden; position: relative;
         }
-        /* 視窗內部的局部縮放區域（此處為灰色背景底） */
+        /* 視窗內部的局部縮放區域 */
         .svg-holder {
             width: 100%; max-width: 290px; height: 290px; position: relative; overflow: hidden; 
             background: #1a1a1a; border-radius: 8px; touch-action: none;
@@ -153,7 +153,7 @@
 <body>
 
 <div class="container">
-    <h3>北辰射箭國際雙階運科板</h3>
+    <h3>北辰射箭計分系統</h3>
     
     <div id="setupPanel" class="setup-overlay">
         <label style="font-weight: bold; color: var(--gold);">🛠️ 本局測驗與計時規格設定</label><br>
@@ -193,6 +193,7 @@
             <div class="metric-line">🎯 當組偏移: <span id="mAccuracy">--</span></div>
             <div class="metric-line">🧬 集中直徑: <span id="mPrecision">--</span></div>
             <div class="metric-line">⚡ 穩定起伏: <span id="mStability">--</span></div>
+            <div class="metric-line">📊 每趟均值: <span id="mEndAvg">--</span></div>
         </div>
     </div>
 
@@ -200,7 +201,8 @@
         <strong>📊 射箭運動科學指標說明：</strong><br>
         • <strong>當組偏移 (Accuracy)：</strong>箭著點與絕對靶心的平均距離。數值越低，代表瞄具校正越精準。<br>
         • <strong>集中直徑 (Precision)：</strong>剔除單支最遠離群箭後的核心密集度。數值越小，代表技術動作重複性極高。<br>
-        • <strong>穩定起伏 (Stability)：</strong>環數分數的標準差。用來量化射手在該趟中技術與心理耐受度。
+        • <strong>穩定起伏 (Stability)：</strong>環數分數的標準差。用來量化射手在該趟中技術與心理耐受度。<br>
+        • <strong>每趟均值 (End Avg)：</strong>當前所勾選趟數的平均單箭得分（總得分 ÷ 總箭數）。
     </div>
 
     <div class="main-display-zone">
@@ -256,7 +258,7 @@
 
     <div class="system-footer">
         NORTH STAR ARCHERY LAB SYSTEM © 2026<br>
-        DESIGNED BY ROY | VERSION 1.3.8 邊界聲響微調版
+        DESIGNED BY ROY | VERSION 1.3.9 脫靶落點優化版
     </div>
 </div>
 
@@ -281,7 +283,6 @@
         { inner: "rgba(241, 196, 15, 0.45)", outer: "rgba(241, 196, 15, 0.12)" }
     ];
 
-    // 精準音效系統：支援短音與客製 2 秒長音
     function playBeep(type) {
         try {
             if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -292,14 +293,12 @@
             gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
 
             if (type === 'long2s') {
-                // 歸零精準長鳴 2 秒
                 osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
                 osc.start(); 
                 gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime + 1.6);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.0);
                 osc.stop(audioCtx.currentTime + 2.0);
             } else {
-                // 標準清脆提示短音
                 osc.type = 'square'; osc.frequency.setValueAtTime(950, audioCtx.currentTime);
                 osc.start(); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
                 osc.stop(audioCtx.currentTime + 0.2);
@@ -395,7 +394,6 @@
             box.className = "timer-box"; status.innerHTML = "⏸️ 已暫停<br>點擊續傳";
         } else {
             if (currentSeconds <= 0) {
-                // 1. 預備開始跑之前（點擊啟動當下）：立即逼一聲
                 timerState = "PREP"; currentSeconds = parseInt(document.getElementById('cfgPrepSec').value);
                 box.className = "timer-box prep-phase"; disp.style.color = "#ff3333";
                 status.innerHTML = "🔴 預備中<br>請勿起弓";
@@ -407,13 +405,11 @@
             timerInterval = setInterval(() => {
                 currentSeconds--; disp.textContent = currentSeconds;
 
-                // 正式射擊倒數最後 10 秒內每秒逼一聲
                 if (timerState === "SHOOT" && currentSeconds <= 10 && currentSeconds > 0) { 
                     playBeep('short'); 
                 }
 
                 if (timerState === "PREP" && currentSeconds <= 0) {
-                    // 2. 預備時間結束、切換至射擊時間的瞬間：再逼一聲
                     playBeep('short');
                     
                     timerState = "SHOOT"; currentSeconds = parseInt(document.getElementById('cfgShootSec').value);
@@ -421,7 +417,6 @@
                     status.innerHTML = "🏹 射擊中<br>計時獨立";
                     disp.textContent = currentSeconds;
                 } else if (timerState === "SHOOT" && currentSeconds <= 0) {
-                    // 3. 測驗秒數歸零：觸發 2 秒長鳴
                     clearInterval(timerInterval); timerState = "IDLE"; box.className = "timer-box";
                     disp.style.color = "#ff3333"; status.innerHTML = "🛑 時間到";
                     playBeep('long2s'); 
@@ -531,26 +526,25 @@
             if (e.touches.length === 0) isDragging = false;
         });
 
-        // 點擊記分判定（白色1分外圍皆可記M，灰色底不計分供滑動）
+        // 點擊記分判定
         targetSvg.addEventListener('pointerdown', function(e) {
             if (!document.getElementById('chkScoreMode').checked) return;
             if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
 
-            // 逆向解算 SVG 幾何座標
             const rect = targetSvg.getBoundingClientRect();
             const svgX = ((e.clientX - rect.left) / rect.width) * 300;
             const svgY = ((e.clientY - rect.top) / rect.height) * 300;
             const distance = Math.sqrt(Math.pow(svgX - TARGET_CENTER, 2) + Math.pow(svgY - TARGET_CENTER, 2));
 
-            // 💡 核心過濾邏輯：如果點到 SVG 外圍白色邊界以外的純灰色背景，直接 return 不計分，保留給拖曳手勢
+            // 過濾點擊：如果點到核心白色底板以外的純灰色背景，直接 return 不計分，保留給拖曳手勢
             if (e.target.id !== "whiteTargetBackground" && e.target.tagName !== "circle" && e.target.tagName !== "rect") {
                 return;
             }
             if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) {
-                return; // 超出 300x300 核心畫布，不觸發記分
+                return; 
             }
 
-            let res = { score: 0, display: "M" }; // 預設為脫靶 (M)
+            let res = { score: 0, display: "M" }; // 預設為脫靶 (M)，此處會完整保留落點座標 (svgX, svgY)
             const RING_RADII = [
                 { r: 7.5, score: 10, display: "X" }, { r: 15, score: 10, display: "10" },
                 { r: 30, score: 9, display: "9" },   { r: 45, score: 8, display: "8" },
@@ -560,7 +554,6 @@
                 { r: 150, score: 1, display: "1" }
             ];
 
-            // 檢查是否落在 1~10 環實體圈內
             for (let zone of RING_RADII) { 
                 if (distance <= zone.r) { 
                     res = zone; 
@@ -568,7 +561,6 @@
                 } 
             }
 
-            // 如果 distance > 150，但它依然在 SVG 白色底板內，則 res 保持預設的 { score: 0, display: "M" }
             fullRoundData[currentEnd][currentIndex] = { 
                 x: Math.max(0, Math.min(300, svgX)), y: Math.max(0, Math.min(300, svgY)), 
                 score: res.score, display: res.display, dist: distance 
@@ -605,16 +597,23 @@
             document.getElementById('mAccuracy').textContent = "--";
             document.getElementById('mPrecision').textContent = "--";
             document.getElementById('mStability').textContent = "--";
+            document.getElementById('mEndAvg').textContent = "--";
             return;
         }
 
+        // 1. 當組偏移
         let totalDist = allSelectedArrows.reduce((sum, a) => sum + a.dist, 0);
         document.getElementById('mAccuracy').textContent = (totalDist / allSelectedArrows.length).toFixed(1) + "px";
 
-        let avgScore = allScores.reduce((sum, s) => sum + s, 0) / allScores.length;
+        // 2. 穩定起伏與每趟均值
+        let totalScoreSum = allScores.reduce((sum, s) => sum + s, 0);
+        let avgScore = totalScoreSum / allScores.length;
+        document.getElementById('mEndAvg').textContent = avgScore.toFixed(2) + " 分";
+
         let variance = allScores.reduce((sum, s) => sum + Math.pow(s - avgScore, 2), 0) / allScores.length;
         document.getElementById('mStability').textContent = Math.sqrt(variance).toFixed(1);
 
+        // 3. 集中直徑
         if (allSelectedArrows.length >= 3) {
             let coreArrows = [...allSelectedArrows];
             let globalX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length;
@@ -656,10 +655,15 @@
             }
 
             validArrows.forEach((arrow) => {
-                if (arrow.display === "M") return;
+                // 💡 移除原本的 return 限制，即便 display === "M"，也渲染出落點（改用特殊的紅色小點標記脫靶）
                 const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                 c.setAttribute("cx", arrow.x); c.setAttribute("cy", arrow.y); c.setAttribute("r", "3.5");
-                c.setAttribute("fill", STORM_COLORS[eIdx % 6].inner); c.setAttribute("stroke", "#fff"); c.setAttribute("stroke-width", "0.8");
+                if (arrow.display === "M") {
+                    c.setAttribute("fill", "rgba(231, 76, 60, 0.8)"); c.setAttribute("stroke", "#ffaaaa");
+                } else {
+                    c.setAttribute("fill", STORM_COLORS[eIdx % 6].inner); c.setAttribute("stroke", "#fff");
+                }
+                c.setAttribute("stroke-width", "0.8");
                 arrowGroup.appendChild(c);
             });
         });
