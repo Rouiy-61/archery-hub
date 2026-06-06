@@ -265,7 +265,8 @@
 <video id="hiddenVideo" autoplay muted playsinline style="display:none;"></video>
 
 <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwodA__vj2ZrnbR21Rj79KtG1aXpiJbbb6DbHlbEeAPb-D_SsW6DQ-vhCRqIxFYYwOwNg/exec"; 
+    // 經確認已修正為最新的「任何人」權限網址
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzg_PFt2oDBDL8Bboegje5nzpL5zdHuzGsBVyKOXKm9TgWSaFovkeeifm9_EZy0l8RaYw/exec"; 
 
     let TOTAL_ROWS = 0; let TOTAL_ARROWS_LIMIT = 0;
     const TARGET_CENTER = 150;
@@ -651,7 +652,7 @@
             alert(`🎉 運科大數據同步成功！教練已可在試算表中查看【選手ID: ${GLOBAL_ATHLETE_ID}】的完整智慧風暴圖與延時技術回放！`);
             location.reload();
         } else {
-            alert("同步失敗，可能原因：\n1. 影片檔案過大導致連線超時\n2. 您的 Google 雲端硬碟當日API寫入檔案限制額度已達上限。\n\n💡 提示：明天配額重置後即可正常運作。如欲立刻測試純數據，可於下趟嘗試將『錄影鏡頭』關閉後上傳。");
+            alert("同步失敗，請檢查網路連線或 GAS 雲端流量限制。");
             upBtn.disabled = false; upBtn.style.opacity = "1"; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
         }
     }
