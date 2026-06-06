@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>北辰射箭計分系統 v1.4.2</title>
+    <title>北辰射箭計分系統 v1.4.3</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -70,7 +70,7 @@
         .metric-line { margin: 1px 0; }
         .metric-line span { color: var(--gold); font-weight: bold; float: right; }
 
-        /* 反轉說明面板 */
+        /* 說明面板 */
         .desc-panel {
             display: none; width: 100%; background: #22313f; border-left: 4px solid #3498db;
             padding: 8px; border-radius: 4px; font-size: 11px; color: #eceff1; margin-bottom: 10px; box-sizing: border-box;
@@ -88,7 +88,6 @@
             width: 100%; display: flex; flex-direction: column; align-items: center;
             overflow: hidden; position: relative;
         }
-        /* 視窗內部的局部縮放區域 */
         .svg-holder {
             width: 100%; max-width: 290px; height: 290px; position: relative; overflow: hidden; 
             background: #1a1a1a; border-radius: 8px; touch-action: none;
@@ -106,14 +105,13 @@
         #camCanvas { width: 100%; max-width: 320px; height: 240px; background: #000; border-radius: 8px; border: 1px solid #444; transform: scaleX(-1); }
         .cam-status-lbl { font-size: 11px; margin-top: 6px; color: #ff3333; display: flex; align-items: center; gap: 4px; }
         
-        /* 錄影畫面一鍵返回 */
         .btn-return-target {
             width: 100%; max-width: 320px; background: linear-gradient(135deg, #2ecc71, #27ae60);
             color: white; border: none; padding: 10px; font-size: 13px; font-weight: bold;
             border-radius: 6px; margin-bottom: 8px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
         }
 
-        /* 控制開關與切換列（固定底端） */
+        /* 控制開關與切換列 */
         .control-mode-bar {
             width: 100%; background: #252a30; padding: 10px 6px; border-radius: 8px;
             margin-top: 10px; font-size: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
@@ -157,16 +155,20 @@
     
     <div id="setupPanel" class="setup-overlay">
         <label style="font-weight: bold; color: var(--gold);">🛠️ 本局測驗與計時規格設定</label><br>
-        總箭數：
-        <select id="cfgTotalArrows">
-            <option value="36">36 箭 (6組)</option>
-            <option value="72" selected>72 箭 (12組)</option>
-            <option value="18">18 箭 (3組)</option>
-            <option value="6">6 箭 (1組測試)</option>
-        </select><br>
-        預備：<input type="number" id="cfgPrepSec" value="10" style="width: 40px;"> 秒 ｜ 
-        射擊：<input type="number" id="cfgShootSec" value="90" style="width: 40px;"> 秒
-        <button onclick="startSession()" id="btnStartGame" style="margin-top:10px; padding:10px; width:90%; font-size:15px; font-weight:bold; background: linear-gradient(135deg, #e67e22, #d35400); color:white; border:none; border-radius:6px; cursor:pointer;">🎯 開局！</button>
+        <div style="margin-top: 8px; text-align: left; display: inline-block;">
+            選手 ID：<input type="text" id="cfgAthleteId" value="BC-001" style="width: 80px;"><br>
+            選手姓名：<input type="text" id="cfgUserId" value="邱柏恩" style="width: 80px;"><br>
+            總箭數：
+            <select id="cfgTotalArrows" style="width: 94px;">
+                <option value="36">36 箭 (6組)</option>
+                <option value="72" selected>72 箭 (12組)</option>
+                <option value="18">18 箭 (3組)</option>
+                <option value="6">6 箭 (1組測試)</option>
+            </select><br>
+            預備時間：<input type="number" id="cfgPrepSec" value="10" style="width: 40px;"> 秒<br>
+            射擊時間：<input type="number" id="cfgShootSec" value="90" style="width: 40px;"> 秒
+        </div>
+        <button onclick="startSession()" id="btnStartGame" style="margin-top:12px; padding:10px; width:90%; font-size:15px; font-weight:bold; background: linear-gradient(135deg, #e67e22, #d35400); color:white; border:none; border-radius:6px; cursor:pointer;">🎯 開局！</button>
     </div>
 
     <div class="score-table-container">
@@ -199,19 +201,17 @@
 
     <div id="descPanel" class="desc-panel">
         <strong>📊 射箭運動科學指標說明：</strong><br>
-        • <strong>當組偏移 (Accuracy)：</strong>箭著點與絕對靶心的平均距離。數值越低，代表瞄具校正越精準。<br>
-        • <strong>集中直徑 (Precision)：</strong>剔除單支最遠離群箭後的核心密集度。數值越小，代表技術動作重複性極高。<br>
-        • <strong>穩定起伏 (Stability)：</strong>環數分數的標準差。用來量化射手在該趟中技術與心理耐受度。<br>
-        • <strong>每趟均值 (End Avg)：</strong>當前所勾選趟數的平均單箭得分（總得分 ÷ 總箭數）。
+        • <strong>當組偏移 (Accuracy)：</strong>箭著點與絕對靶心的平均距離。數值越低，瞄具越準。<br>
+        • <strong>集中直徑 (Precision)：</strong>核心密集度。數值越小，代表技術動作重複性極高。<br>
+        • <strong>穩定起伏 (Stability)：</strong>分數標準差。量化射手該趟技術與心理耐受度。<br>
+        • <strong>每趟均值 (End Avg)：</strong>當前勾選趟數的平均單箭得分。
     </div>
 
     <div class="main-display-zone">
-        
         <div id="targetWrapper">
             <div class="svg-holder" id="svgHolder">
                 <svg id="archeryTarget" viewBox="0 0 300 300">
                     <rect x="0" y="0" width="300" height="300" fill="#ffffff" id="whiteTargetBackground"/>
-                    
                     <circle cx="150" cy="150" r="150" fill="#ffffff" stroke="#ccc" stroke-width="0.5"/>
                     <circle cx="150" cy="150" r="135" fill="#ffffff" stroke="#ccc" stroke-width="0.5"/>
                     <circle cx="150" cy="150" r="120" fill="#121212" stroke="#444" stroke-width="0.5"/>
@@ -258,14 +258,15 @@
 
     <div class="system-footer">
         NORTH STAR ARCHERY LAB SYSTEM © 2026<br>
-        DESIGNED BY ROY | VERSION 1.4.2 記憶體防卡死極速版
+        DESIGNED BY ROY | VERSION 1.4.3 運科多媒體直傳版
     </div>
 </div>
 
 <video id="hiddenVideo" autoplay muted playsinline style="display:none;"></video>
 
 <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzQpQfX.../exec"; 
+    // 🎯 這裡已經成功對接你提供的最新 GAS 網頁應用程式網址
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzxlQAm526oL5zGjwwQ2g2Dy4WxsBAhGnBJQzSZ3O2QypmWPmf-uKKpipZVi9Jk6wBJPA/exec"; 
 
     let TOTAL_ROWS = 0; let TOTAL_ARROWS_LIMIT = 0;
     const TARGET_CENTER = 150;
@@ -273,6 +274,8 @@
     let currentEnd = 0, currentIndex = 0, globalArrowCount = 0;
     let audioCtx = null;
     let currentView = "TARGET"; 
+    let GLOBAL_ATHLETE_ID = "";
+    let GLOBAL_USER_NAME = "";
 
     const STORM_COLORS = [
         { inner: "rgba(255, 0, 255, 0.4)",  outer: "rgba(255, 0, 255, 0.12)" },
@@ -284,38 +287,31 @@
     ];
 
     function ensureAudioContext() {
-        if (!audioCtx) {
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioCtx && audioCtx.state === 'suspended') {
-            audioCtx.resume();
-        }
+        if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); }
     }
 
     function playBeep(type) {
         try {
             ensureAudioContext();
-            let osc = audioCtx.createOscillator();
-            let gainNode = audioCtx.createGain();
+            let osc = audioCtx.createOscillator(); let gainNode = audioCtx.createGain();
             osc.connect(gainNode); gainNode.connect(audioCtx.destination);
             gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime);
-
             if (type === 'long2s') {
-                osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-                osc.start(); 
+                osc.type = 'sine'; osc.frequency.setValueAtTime(800, audioCtx.currentTime); osc.start(); 
                 gainNode.gain.setValueAtTime(0.8, audioCtx.currentTime + 1.6);
-                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.0);
-                osc.stop(audioCtx.currentTime + 2.0);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2.0); osc.stop(audioCtx.currentTime + 2.0);
             } else {
                 osc.type = 'square'; osc.frequency.setValueAtTime(950, audioCtx.currentTime);
-                osc.start(); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-                osc.stop(audioCtx.currentTime + 0.2);
+                osc.start(); gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2); osc.stop(audioCtx.currentTime + 0.2);
             }
         } catch(e) { console.log("Audio blocked:", e); }
     }
 
     function startSession() {
         ensureAudioContext();
+        GLOBAL_ATHLETE_ID = document.getElementById('cfgAthleteId').value;
+        GLOBAL_USER_NAME = document.getElementById('cfgUserId').value;
         TOTAL_ARROWS_LIMIT = parseInt(document.getElementById('cfgTotalArrows').value);
         TOTAL_ROWS = TOTAL_ARROWS_LIMIT / 6;
         fullRoundData = Array.from({ length: TOTAL_ROWS }, () => []);
@@ -362,15 +358,11 @@
     }
 
     function switchMainView() {
-        const tWrap = document.getElementById('targetWrapper');
-        const vWrap = document.getElementById('videoWrapper');
-        const vName = document.getElementById('currentViewName');
+        const tWrap = document.getElementById('targetWrapper'); const vWrap = document.getElementById('videoWrapper'); const vName = document.getElementById('currentViewName');
         if (currentView === "TARGET") {
-            tWrap.style.display = "none"; vWrap.style.display = "flex";
-            currentView = "VIDEO"; vName.textContent = "📹 25秒動態回放視窗";
+            tWrap.style.display = "none"; vWrap.style.display = "flex"; currentView = "VIDEO"; vName.textContent = "📹 25秒動態回放視窗";
         } else {
-            vWrap.style.display = "none"; tWrap.style.display = "flex";
-            currentView = "TARGET"; vName.textContent = "🎯 智能靶紙視窗";
+            vWrap.style.display = "none"; tWrap.style.display = "flex"; currentView = "TARGET"; vName.textContent = "🎯 智能靶紙視窗";
         }
     }
 
@@ -388,69 +380,46 @@
     
     function toggleTimer() {
         ensureAudioContext();
-        const box = document.getElementById('timerContainer');
-        const disp = document.getElementById('timerDisplay');
-        const status = document.getElementById('timerStatus');
-
+        const box = document.getElementById('timerContainer'); const disp = document.getElementById('timerDisplay'); const status = document.getElementById('timerStatus');
         if (timerState === "PREP" || timerState === "SHOOT") {
-            clearInterval(timerInterval); timerState = "IDLE";
-            box.className = "timer-box"; status.innerHTML = "⏸️ 已暫停<br>點擊續傳";
+            clearInterval(timerInterval); timerState = "IDLE"; box.className = "timer-box"; status.innerHTML = "⏸️ 已暫停<br>點擊續傳";
         } else {
             if (currentSeconds <= 0) {
                 timerState = "PREP"; currentSeconds = parseInt(document.getElementById('cfgPrepSec').value);
-                box.className = "timer-box prep-phase"; disp.style.color = "#ff3333";
-                status.innerHTML = "🔴 預備中<br>請勿起弓";
-                playBeep('short'); 
-            } else {
-                timerState = (box.classList.contains("shoot-phase")) ? "SHOOT" : "PREP";
-            }
+                box.className = "timer-box prep-phase"; disp.style.color = "#ff3333"; status.innerHTML = "🔴 預備中<br>請勿起弓"; playBeep('short'); 
+            } else { timerState = (box.classList.contains("shoot-phase")) ? "SHOOT" : "PREP"; }
 
             timerInterval = setInterval(() => {
                 currentSeconds--; disp.textContent = currentSeconds;
                 if (timerState === "SHOOT" && currentSeconds <= 10 && currentSeconds > 0) { playBeep('short'); }
                 if (timerState === "PREP" && currentSeconds <= 0) {
-                    playBeep('short');
-                    timerState = "SHOOT"; currentSeconds = parseInt(document.getElementById('cfgShootSec').value);
-                    box.className = "timer-box shoot-phase"; disp.style.color = "#2ecc71";
-                    status.innerHTML = "🏹 射擊中<br>計時獨立";
-                    disp.textContent = currentSeconds;
+                    playBeep('short'); timerState = "SHOOT"; currentSeconds = parseInt(document.getElementById('cfgShootSec').value);
+                    box.className = "timer-box shoot-phase"; disp.style.color = "#2ecc71"; status.innerHTML = "🏹 射擊中<br>計時獨立"; disp.textContent = currentSeconds;
                 } else if (timerState === "SHOOT" && currentSeconds <= 0) {
-                    clearInterval(timerInterval); timerState = "IDLE"; box.className = "timer-box";
-                    disp.style.color = "#ff3333"; status.innerHTML = "🛑 時間到";
-                    playBeep('long2s'); 
+                    clearInterval(timerInterval); timerState = "IDLE"; box.className = "timer-box"; disp.style.color = "#ff3333"; status.innerHTML = "🛑 時間到"; playBeep('long2s'); 
                 }
             }, 1000);
         }
     }
 
-    // 🧠 記憶體核心優化：全域重複使用單一離屏畫布，杜絕不斷建立 DOM 導致記憶體爆掉
+    // 🧠 記憶體防卡死極速錄影引擎
     let videoStream = null; let camAnimationId = null; let frameBuffer = [];
     const DELAY_FRAMES = 25 * 24; 
-    let offscreenCanvas = document.createElement('canvas');
-    let offscreenCtx = offscreenCanvas.getContext('2d');
+    let offscreenCanvas = document.createElement('canvas'); let offscreenCtx = offscreenCanvas.getContext('2d');
 
     function toggleCameraHardware() {
         const isChecked = document.getElementById('chkCamActive').checked;
-        const lbl = document.getElementById('camStatusLabel');
-        const canvas = document.getElementById('camCanvas');
-        const ctx = canvas.getContext('2d');
-
+        const lbl = document.getElementById('camStatusLabel'); const canvas = document.getElementById('camCanvas'); const ctx = canvas.getContext('2d');
         if (isChecked) {
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 }, audio: false })
             .then(stream => {
                 videoStream = stream;
                 const videoEl = document.getElementById('hiddenVideo'); videoEl.srcObject = stream;
-                canvas.width = 320; canvas.height = 240;
-                offscreenCanvas.width = 320; offscreenCanvas.height = 240;
-                
-                // 確實清理舊緩衝
-                frameBuffer.forEach(f => f = null);
-                frameBuffer = [];
+                canvas.width = 320; canvas.height = 240; offscreenCanvas.width = 320; offscreenCanvas.height = 240;
+                frameBuffer.forEach(f => f = null); frameBuffer = [];
 
                 function processFrame() {
                     if (!document.getElementById('chkCamActive').checked) return;
-                    
-                    // 優化點：直接在全域的離屏畫布繪製，並快取輕量化的 ImageData 物件而非整個 Canvas DOM
                     offscreenCtx.drawImage(videoEl, 0, 0, 320, 240);
                     let imgData = offscreenCtx.getImageData(0, 0, 320, 240);
                     frameBuffer.push(imgData);
@@ -458,11 +427,8 @@
                     if (frameBuffer.length >= DELAY_FRAMES) {
                         lbl.innerHTML = "<span style='color:#2ecc71;'>🟢 25秒自拍動態回放已聯結</span>";
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        
-                        // 抽出最舊的一幀並渲染
                         let oldestFrame = frameBuffer.shift();
-                        ctx.putImageData(oldestFrame, 0, 0);
-                        oldestFrame = null; // 手動切斷參照，幫助垃圾回收器(GC)極速清除
+                        ctx.putImageData(oldestFrame, 0, 0); oldestFrame = null; 
                     } else {
                         ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
                         ctx.fillStyle = "#e67e22"; ctx.fillRect(0, canvas.height - 6, (frameBuffer.length / DELAY_FRAMES) * canvas.width, 6);
@@ -472,101 +438,58 @@
                 }
                 camAnimationId = requestAnimationFrame(processFrame);
             }).catch((e) => { 
-                console.error(e);
-                lbl.textContent = "❌ 無法存取自拍相機"; 
-                document.getElementById('chkCamActive').checked = false;
+                console.error(e); lbl.textContent = "❌ 無法存取自拍相機"; document.getElementById('chkCamActive').checked = false;
             });
         } else {
             if (videoStream) { videoStream.getTracks().forEach(track => track.stop()); videoStream = null; }
             if (camAnimationId) { cancelAnimationFrame(camAnimationId); camAnimationId = null; }
             frameBuffer.forEach(f => f = null); frameBuffer = [];
-            ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
-            lbl.textContent = "📷 鏡頭已關閉省電中";
+            ctx.fillStyle = "#000"; ctx.fillRect(0,0,canvas.width,canvas.height); lbl.textContent = "📷 鏡頭已關閉省電中";
         }
     }
 
-    let scale = 1, posX = 0, posY = 0;
-    let isDragging = false; let startX = 0, startY = 0;
-    let touchStartDist = 0;
+    let scale = 1, posX = 0, posY = 0; let isDragging = false; let startX = 0, startY = 0; let touchStartDist = 0;
 
     function initPanZoomTarget() {
-        const targetSvg = document.getElementById('archeryTarget');
-        const holder = document.getElementById('svgHolder');
+        const targetSvg = document.getElementById('archeryTarget'); const holder = document.getElementById('svgHolder');
         function applyTransform() { targetSvg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`; }
-
         holder.addEventListener('touchstart', function(e) {
-            if (e.touches.length === 2) {
-                isDragging = false;
-                touchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-            } else if (e.touches.length === 1) {
-                if (!document.getElementById('chkScoreMode').checked) {
-                    isDragging = true;
-                    startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY;
-                }
-            }
+            if (e.touches.length === 2) { isDragging = false; touchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); } 
+            else if (e.touches.length === 1) { if (!document.getElementById('chkScoreMode').checked) { isDragging = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY; } }
         }, { passive: true });
-
         holder.addEventListener('touchmove', function(e) {
             if (e.touches.length === 2 && touchStartDist > 0) {
-                let dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-                let rect = holder.getBoundingClientRect();
-                let midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
-                let midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-                let oldScale = scale;
-                let factor = dist / touchStartDist;
-                scale = Math.max(1, Math.min(4, scale * factor)); 
-                posX = midX - (midX - posX) * (scale / oldScale);
-                posY = midY - (midY - posY) * (scale / oldScale);
-                touchStartDist = dist; applyTransform();
-            } else if (e.touches.length === 1 && isDragging) {
-                posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY; applyTransform();
-            }
+                let dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); let rect = holder.getBoundingClientRect();
+                let midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left; let midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+                let oldScale = scale; let factor = dist / touchStartDist; scale = Math.max(1, Math.min(4, scale * factor)); 
+                posX = midX - (midX - posX) * (scale / oldScale); posY = midY - (midY - posY) * (scale / oldScale); touchStartDist = dist; applyTransform();
+            } else if (e.touches.length === 1 && isDragging) { posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY; applyTransform(); }
         }, { passive: true });
-
-        holder.addEventListener('touchend', function(e) {
-            if (e.touches.length < 2) touchStartDist = 0;
-            if (e.touches.length === 0) isDragging = false;
-        });
+        holder.addEventListener('touchend', function(e) { if (e.touches.length < 2) touchStartDist = 0; if (e.touches.length === 0) isDragging = false; });
 
         targetSvg.addEventListener('pointerdown', function(e) {
-            ensureAudioContext(); 
-            if (!document.getElementById('chkScoreMode').checked) return;
-            if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
-
-            const rect = targetSvg.getBoundingClientRect();
-            const svgX = ((e.clientX - rect.left) / rect.width) * 300;
-            const svgY = ((e.clientY - rect.top) / rect.height) * 300;
+            ensureAudioContext(); if (!document.getElementById('chkScoreMode').checked) return; if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
+            const rect = targetSvg.getBoundingClientRect(); const svgX = ((e.clientX - rect.left) / rect.width) * 300; const svgY = ((e.clientY - rect.top) / rect.height) * 300;
             const distance = Math.sqrt(Math.pow(svgX - TARGET_CENTER, 2) + Math.pow(svgY - TARGET_CENTER, 2));
-
             if (e.target.id !== "whiteTargetBackground" && e.target.tagName !== "circle" && e.target.tagName !== "rect") return;
             if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) return; 
 
             let res = { score: 0, display: "M" }; 
             const RING_RADII = [
-                { r: 7.5, score: 10, display: "X" }, { r: 15, score: 10, display: "10" },
-                { r: 30, score: 9, display: "9" },   { r: 45, score: 8, display: "8" },
-                { r: 60, score: 7, display: "7" },   { r: 75, score: 6, display: "6" },
-                { r: 90, score: 5, display: "5" },   { r: 105, score: 4, display: "4" },
-                { r: 120, score: 3, display: "3" },  { r: 135, score: 2, display: "2" },
-                { r: 150, score: 1, display: "1" }
+                { r: 7.5, score: 10, display: "X" }, { r: 15, score: 10, display: "10" }, { r: 30, score: 9, display: "9" },   
+                { r: 45, score: 8, display: "8" },   { r: 60, score: 7, display: "7" },   { r: 75, score: 6, display: "6" },   
+                { r: 90, score: 5, display: "5" },   { r: 105, score: 4, display: "4" },  { r: 120, score: 3, display: "3" },  
+                { r: 135, score: 2, display: "2" },  { r: 150, score: 1, display: "1" }
             ];
-
             for (let zone of RING_RADII) { if (distance <= zone.r) { res = zone; break; } }
 
-            fullRoundData[currentEnd][currentIndex] = { 
-                x: Math.max(0, Math.min(300, svgX)), y: Math.max(0, Math.min(300, svgY)), 
-                score: res.score, display: res.display, dist: distance 
-            };
-            
+            fullRoundData[currentEnd][currentIndex] = { x: Math.max(0, Math.min(300, svgX)), y: Math.max(0, Math.min(300, svgY)), score: res.score, display: res.display, dist: distance };
             document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = res.display;
-            globalArrowCount++; recalculateTotals(); handleLayerAndMetricsChange();
-
-            currentIndex++;
+            globalArrowCount++; recalculateTotals(); handleLayerAndMetricsChange(); currentIndex++;
             if (currentIndex > 5) { currentIndex = 0; currentEnd++; }
             if (globalArrowCount >= TOTAL_ARROWS_LIMIT) {
                 const upBtn = document.getElementById('btnUpload'); upBtn.disabled = false; upBtn.style.opacity = "1";
-                upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
-                document.getElementById('chkScoreMode').checked = false; 
+                upBtn.textContent = "🎉 滿箭！上傳雲端資料庫"; document.getElementById('chkScoreMode').checked = false; 
             }
             updateActiveHighlight();
         });
@@ -576,60 +499,37 @@
 
     function calculateMultiEndMetrics() {
         let allSelectedArrows = []; let allScores = [];
-        fullRoundData.forEach((endArrows, eIdx) => {
-            if (document.getElementById(`chk-end-${eIdx}`)?.checked) {
-                endArrows.forEach(a => { if (a) { allSelectedArrows.push(a); allScores.push(a.score); } });
-            }
-        });
+        fullRoundData.forEach((endArrows, eIdx) => { if (document.getElementById(`chk-end-${eIdx}`)?.checked) { endArrows.forEach(a => { if (a) { allSelectedArrows.push(a); allScores.push(a.score); } }); } });
         if (allSelectedArrows.length === 0) {
-            document.getElementById('mAccuracy').textContent = "--"; document.getElementById('mPrecision').textContent = "--";
-            document.getElementById('mStability').textContent = "--"; document.getElementById('mEndAvg').textContent = "--"; return;
+            document.getElementById('mAccuracy').textContent = "--"; document.getElementById('mPrecision').textContent = "--"; document.getElementById('mStability').textContent = "--"; document.getElementById('mEndAvg').textContent = "--"; return;
         }
-        let totalDist = allSelectedArrows.reduce((sum, a) => sum + a.dist, 0);
-        document.getElementById('mAccuracy').textContent = (totalDist / allSelectedArrows.length).toFixed(1) + "px";
-        let totalScoreSum = allScores.reduce((sum, s) => sum + s, 0); let avgScore = totalScoreSum / allScores.length;
-        document.getElementById('mEndAvg').textContent = avgScore.toFixed(2) + " 分";
-        let variance = allScores.reduce((sum, s) => sum + Math.pow(s - avgScore, 2), 0) / allScores.length;
-        document.getElementById('mStability').textContent = Math.sqrt(variance).toFixed(1);
+        let totalDist = allSelectedArrows.reduce((sum, a) => sum + a.dist, 0); document.getElementById('mAccuracy').textContent = (totalDist / allSelectedArrows.length).toFixed(1) + "px";
+        let totalScoreSum = allScores.reduce((sum, s) => sum + s, 0); let avgScore = totalScoreSum / allScores.length; document.getElementById('mEndAvg').textContent = avgScore.toFixed(2) + " 分";
+        let variance = allScores.reduce((sum, s) => sum + Math.pow(s - avgScore, 2), 0) / allScores.length; document.getElementById('mStability').textContent = Math.sqrt(variance).toFixed(1);
 
         if (allSelectedArrows.length >= 3) {
-            let coreArrows = [...allSelectedArrows];
-            let globalX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length;
-            let globalY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
-            let worstIdx = 0; let maxD = -1;
-            coreArrows.forEach((a, i) => { let d = Math.pow(a.x - globalX, 2) + Math.pow(a.y - globalY, 2); if (d > maxD) { maxD = d; worstIdx = i; } });
-            coreArrows.splice(worstIdx, 1);
-            let newX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length;
-            let newY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
-            let maxSpread = Math.max(...coreArrows.map(a => Math.sqrt(Math.pow(a.x - newX, 2) + Math.pow(a.y - newY, 2))));
-            document.getElementById('mPrecision').textContent = (maxSpread * 2).toFixed(1) + "px";
+            let coreArrows = [...allSelectedArrows]; let globalX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length; let globalY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
+            let worstIdx = 0; let maxD = -1; coreArrows.forEach((a, i) => { let d = Math.pow(a.x - globalX, 2) + Math.pow(a.y - globalY, 2); if (d > maxD) { maxD = d; worstIdx = i; } }); coreArrows.splice(worstIdx, 1);
+            let newX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length; let newY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
+            let maxSpread = Math.max(...coreArrows.map(a => Math.sqrt(Math.pow(a.x - newX, 2) + Math.pow(a.y - newY, 2)))); document.getElementById('mPrecision').textContent = (maxSpread * 2).toFixed(1) + "px";
         } else { document.getElementById('mPrecision').textContent = "--"; }
     }
 
     function renderClustersAndArrows() {
-        const clusterGroup = document.getElementById('clusterLayerGroup');
-        const arrowGroup = document.getElementById('arrowGroup');
+        const clusterGroup = document.getElementById('clusterLayerGroup'); const arrowGroup = document.getElementById('arrowGroup');
         clusterGroup.innerHTML = ""; arrowGroup.innerHTML = "";
-
         fullRoundData.forEach((endArrows, eIdx) => {
-            if (!document.getElementById(`chk-end-${eIdx}`)?.checked) return;
-            let validArrows = endArrows.filter(a => a !== undefined); if (validArrows.length === 0) return;
-
+            if (!document.getElementById(`chk-end-${eIdx}`)?.checked) return; let validArrows = endArrows.filter(a => a !== undefined); if (validArrows.length === 0) return;
             if (validArrows.length >= 3) {
-                let allX = validArrows.reduce((sum, a) => sum + a.x, 0) / validArrows.length;
-                let allY = validArrows.reduce((sum, a) => sum + a.y, 0) / validArrows.length;
+                let allX = validArrows.reduce((sum, a) => sum + a.x, 0) / validArrows.length; let allY = validArrows.reduce((sum, a) => sum + a.y, 0) / validArrows.length;
                 let maxSpread = Math.max(...validArrows.map(a => Math.sqrt(Math.pow(a.x - allX, 2) + Math.pow(a.y - allY, 2))));
                 const outerStorm = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                outerStorm.setAttribute("cx", allX); outerStorm.setAttribute("cy", allY);
-                outerStorm.setAttribute("r", Math.max(maxSpread + 4, 15));
-                outerStorm.setAttribute("fill", STORM_COLORS[eIdx % 6].outer);
-                outerStorm.setAttribute("stroke", STORM_COLORS[eIdx % 6].inner);
-                outerStorm.setAttribute("stroke-width", "0.8"); outerStorm.setAttribute("stroke-dasharray", "3,2");
-                clusterGroup.appendChild(outerStorm);
+                outerStorm.setAttribute("cx", allX); outerStorm.setAttribute("cy", allY); outerStorm.setAttribute("r", Math.max(maxSpread + 4, 15));
+                outerStorm.setAttribute("fill", STORM_COLORS[eIdx % 6].outer); outerStorm.setAttribute("stroke", STORM_COLORS[eIdx % 6].inner);
+                outerStorm.setAttribute("stroke-width", "0.8"); outerStorm.setAttribute("stroke-dasharray", "3,2"); clusterGroup.appendChild(outerStorm);
             }
             validArrows.forEach((arrow) => {
-                const c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                c.setAttribute("cx", arrow.x); c.setAttribute("cy", arrow.y); c.setAttribute("r", "3.5");
+                const c = document.createElementNS("http://www.w3.org/2000/svg", "circle"); c.setAttribute("cx", arrow.x); c.setAttribute("cy", arrow.y); c.setAttribute("r", "3.5");
                 if (arrow.display === "M") { c.setAttribute("fill", "rgba(231, 76, 60, 0.8)"); c.setAttribute("stroke", "#ffaaaa"); } 
                 else { c.setAttribute("fill", STORM_COLORS[eIdx % 6].inner); c.setAttribute("stroke", "#fff"); }
                 c.setAttribute("stroke-width", "0.8"); arrowGroup.appendChild(c);
@@ -640,47 +540,107 @@
     function recalculateTotals() {
         let runningSum = 0;
         for (let e = 0; e < TOTAL_ROWS; e++) {
-            let endSum = fullRoundData[e].reduce((sum, a) => sum + (a ? a.score : 0), 0);
-            document.getElementById(`endTotal-${e}`).textContent = endSum;
-            if (fullRoundData[e].length > 0) { runningSum += endSum; document.getElementById(`runTotal-${e}`).textContent = runningSum; }
-            else { document.getElementById(`runTotal-${e}`).textContent = "-"; }
+            let endSum = fullRoundData[e].reduce((sum, a) => sum + (a ? a.score : 0), 0); document.getElementById(`endTotal-${e}`).textContent = endSum;
+            if (fullRoundData[e].length > 0) { runningSum += endSum; document.getElementById(`runTotal-${e}`).textContent = runningSum; } else { document.getElementById(`runTotal-${e}`).textContent = "-"; }
         }
     }
 
     function undoLastArrow() {
         if (globalArrowCount === 0) return;
         if (currentIndex === 0) { currentEnd--; currentIndex = 5; } else { currentIndex--; }
-        fullRoundData[currentEnd].pop(); globalArrowCount--;
-        document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = "-";
+        fullRoundData[currentEnd].pop(); globalArrowCount--; document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = "-";
         recalculateTotals(); handleLayerAndMetricsChange(); updateActiveHighlight();
         if (globalArrowCount < TOTAL_ARROWS_LIMIT) {
-            const upBtn = document.getElementById('btnUpload'); upBtn.disabled = true; upBtn.style.opacity = "0.4";
-            upBtn.textContent = "💾 請先完成總箭數";
+            const upBtn = document.getElementById('btnUpload'); upBtn.disabled = true; upBtn.style.opacity = "0.4"; upBtn.textContent = "💾 請先完成總箭數";
         }
     }
 
-    function sendAllToSheets() {
+    // 🌐 智慧多媒體非同步採集器 A：將 SVG 靶紙壓製為 Base64 圖片
+    function getStormImageBase64() {
+        const svgElement = document.getElementById('archeryTarget'); const serializer = new XMLSerializer();
+        let svgString = serializer.serializeToString(svgElement);
+        let svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+        return new Promise((resolve) => {
+            let reader = new FileReader(); reader.readAsDataURL(svgBlob);
+            reader.onloadend = function() { resolve(reader.result); };
+        });
+    }
+
+    // 📹 智慧多媒體非同步採集器 B：將 ImageData 快取記憶體高速壓製為 WebM 延時影片檔
+    function getRecordedVideoBase64() {
+        return new Promise((resolve) => {
+            if (frameBuffer.length === 0) { resolve(null); return; }
+            let recCanvas = document.createElement('canvas'); recCanvas.width = 320; recCanvas.height = 240; let recCtx = recCanvas.getContext('2d');
+            let stream = recCanvas.captureStream(24); 
+            let mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+            let chunks = [];
+            
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                let bigBlob = new Blob(chunks, { type: 'video/webm' });
+                let reader = new FileReader(); reader.readAsDataURL(bigBlob);
+                reader.onloadend = () => resolve(reader.result);
+            };
+            mediaRecorder.start();
+            
+            let frameIdx = 0;
+            function playNextFrame() {
+                if (frameIdx < frameBuffer.length) {
+                    recCtx.putImageData(frameBuffer[frameIdx], 0, 0); frameIdx++;
+                    setTimeout(playNextFrame, 1000 / 24);
+                } else { mediaRecorder.stop(); }
+            }
+            playNextFrame();
+        });
+    }
+
+    // 🚀 運科多媒體資料流同步引擎 (支援 選手ID 傳輸)
+    async function sendAllToSheets() {
+        const upBtn = document.getElementById('btnUpload');
+        upBtn.disabled = true; upBtn.style.opacity = "0.5";
+        upBtn.textContent = "⚡ 運科多媒體打包中 (請勿關閉網頁)...";
+
+        // 1. 採集智慧風暴圖與 25 秒時空影片
+        const stormImgData = await getStormImageBase64();
+        const videoData = await getRecordedVideoBase64();
+
         let promises = [];
+        
         fullRoundData.forEach((endArrows, index) => {
             if (endArrows.length === 0) return;
             let endScore = endArrows.reduce((sum, a) => sum + a.score, 0);
             let arrowDataString = endArrows.map((a, i) => `${a.score}|${Math.round(a.x-TARGET_CENTER)},${Math.round(a.y-TARGET_CENTER)}|${i+1}`).join('#');
             let packedArrows = `100|0,0|0$${arrowDataString}`;
 
-            promises.push(fetch(GAS_API_URL, {
-                method: "POST", mode: "no-cors", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    action: "save_training", userId: "BC-202606-001",
-                    distance: "運科雙層散佈靶", targetSize: "標準加權彈著靶",
-                    endNumber: index + 1, endScore: endScore, isAlert: endScore < 45 ? 1 : 0, packedArrows: packedArrows
+            // 打包符合 GAS 升級版定義的數據封裝
+            let payload = {
+                action: "save_training_v3",
+                athleteId: GLOBAL_ATHLETE_ID,  // 🎯 新增傳送選手ID
+                userId: GLOBAL_USER_NAME,       // 傳送選手姓名
+                endNumber: index + 1,
+                endScore: endScore,
+                packedArrows: packedArrows,
+                stormImageBase64: stormImgData,
+                videoBase64: videoData
+            };
+
+            promises.push(
+                fetch(GAS_API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "text/plain" }, // 使用 text/plain 全速通行
+                    body: JSON.stringify(payload)
                 })
-            }));
+            );
         });
 
         Promise.all(promises).then(() => {
-            alert(`🎉 運科同步成功！數據已寫入雲端大數據庫！`);
+            alert(`🎉 運科大數據同步成功！教練已可在試算表中查看【選手ID: ${GLOBAL_ATHLETE_ID}】的風暴圖與 25 秒動作回放！`);
             location.reload();
-        }).catch(() => { alert("連線超時，請重新檢查網路。"); });
+        }).catch((err) => {
+            console.error(err);
+            alert("同步失敗，請檢查網路連線或 GAS 雲端流量限制。");
+            upBtn.disabled = false; upBtn.style.opacity = "1"; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
+        });
     }
 </script>
 </body>
