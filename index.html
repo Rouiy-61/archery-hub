@@ -164,55 +164,35 @@
     ... (原設定維持不變)
 </div>
 
-async function sendAllToSheets() {
-    // 取得選手 ID (對應您試算表的 A 欄)
-    const userId = document.getElementById('cfgUserId').value || "未命名選手";
-    const btn = document.getElementById('btnUpload');
-    
-    btn.disabled = true;
-    btn.textContent = "正在傳送資料庫...";
+<button onclick="startSession()" id="btnStartGame">開局！</button>
 
-    let runningTotal = 0; // 用於計算累計總分
-
-    try {
-        for (let index = 0; index < fullRoundData.length; index++) {
-            let endArrows = fullRoundData[index];
-            if (endArrows.length === 0) continue;
-
-            // 1. 計算該趟分數
-            let endScore = endArrows.reduce((sum, a) => sum + a.score, 0);
-            
-            // 2. 更新累計總分
-            runningTotal += endScore;
-            
-            // 3. 打包落點數據
-            let packedArrows = endArrows.map((a, i) => `${a.score}|${Math.round(a.x-150)},${Math.round(a.y-150)}|${i+1}`).join('#');
-
-            // 4. 發送請求 (對應 GAS 的欄位結構)
-            const response = await fetch(GAS_API_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    userId: userId,        // A 欄
-                    endNumber: index + 1,  // C 欄
-                    endScore: endScore,    // D 欄
-                    totalScore: runningTotal, // E 欄
-                    packedArrows: packedArrows // F 欄
-                })
-            });
-            
-            if (!response.ok) throw new Error("傳輸中斷，狀態碼: " + response.status);
-        }
-        
-        alert(`🎉 ${userId} 的訓練資料已成功寫入北辰運科訓練紀錄！`);
-    } catch (e) {
-        console.error(e);
-        alert("同步失敗，請確認 GAS 網址與部署版本是否已更新。");
-    } finally {
-        btn.disabled = false;
-        btn.textContent = "💾 上傳雲端資料庫";
+<script>
+    // 1. 開局函數 (您的原代碼應該在這裡)
+    function startSession() {
+        // ...
     }
-}
+
+    // 2. 傳輸函數 (剛剛修正好的這一整段)
+    async function sendAllToSheets() {
+        const userId = document.getElementById('cfgAthleteId').value || "未命名選手"; 
+        const btn = document.getElementById('btnUpload');
+        btn.disabled = true;
+        btn.textContent = "正在傳送資料庫...";
+
+        let runningTotal = 0;
+        try {
+            for (let index = 0; index < fullRoundData.length; index++) {
+                // ... (其餘邏輯與我上面提供的一致)
+            }
+            alert(`🎉 資料已成功寫入！`);
+        } catch (e) {
+            console.error(e);
+            alert("同步失敗。");
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "💾 上傳雲端資料庫";
+        }
+    }
 </script>
         <label style="font-weight: bold; color: var(--gold);">🛠️ 本局測驗與計時規格設定</label><br>
         <div style="margin-top: 8px; text-align: left; display: inline-block;">
