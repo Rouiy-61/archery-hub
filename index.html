@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>北辰射箭計分系統 v1.5.2</title>
+    <title>北辰射箭計分系統 v1.5.3</title>
     <style>
         :root {
             --bg-color: #121212;
@@ -104,7 +104,7 @@
             padding: 0; margin: 0;
         }
 
-        /* 錄影模式下的上方控制列（讓返回按鈕跟計時器並排） */
+        /* 錄影模式下的上方控制列（返回按鈕與計時器並排） */
         .video-top-control {
             display: grid;
             grid-template-columns: 1fr 110px;
@@ -121,7 +121,7 @@
             border: 2px solid #444;
             transform: scaleX(-1); /* 自拍鏡頭水平鏡像 */
             box-sizing: border-box;
-            object-fit: contain;  /* 保持真實黃金比例不拉伸 */
+            object-fit: contain;  /* 保持硬體真實黃金比例不拉伸 */
         }
 
         .cam-status-lbl {
@@ -155,6 +155,7 @@
             cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 4px;
         }
 
+        /* 趟數圖層過濾開關 */
         .toggle-layer-box {
             width: 100%; margin-top: 8px; padding: 6px; background: #252525; border-radius: 6px;
             font-size: 11px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; box-sizing: border-box;
@@ -173,10 +174,10 @@
             border-top: 1px dashed #2d2d2d; padding-top: 8px;
         }
 
-        /* ==========================================
-           ⚡ 錄影全景模式下的 CSS 控制
-           ========================================== */
-        /* 隱藏不要的紅色區塊，但放行運科區裡面的 timer-zone */
+        /* ==================================================
+           ⚡ 錄影全景模式 絕對隱藏優化 (v1.5.3 新增)
+           ================================================== */
+        /* 1. 隱藏上方無用區塊 */
         body.view-video-mode h3,
         body.view-video-mode .score-table-container,
         body.view-video-mode .metrics-box,
@@ -184,12 +185,19 @@
             display: none !important;
         }
         
+        /* 2. 關鍵修正：隱藏下方多餘區塊，釋放高畫質手機全視角空間 */
+        body.view-video-mode .toggle-layer-box,
+        body.view-video-mode .btn-group,
+        body.view-video-mode .system-footer {
+            display: none !important;
+        }
+
         /* 錄影模式下，把原本的 tech-grid 改成純放計時器 */
         body.view-video-mode .tech-grid {
             display: block !important;
             margin-bottom: 5px;
         }
-        /* 隱藏計時器的手動重置按鈕，省空間 */
+        /* 隱藏計時器的手動重置按鈕，極大化省高度 */
         body.view-video-mode .timer-zone .reset-btn {
             display: none !important;
         }
@@ -308,14 +316,14 @@
         <div class="toggle-layer-box" id="layerToggleBox"></div>
     </div>
 
-    <div class="btn-group">
+    <div class="btn-group" id="bottomBtnGroup">
         <button class="action-btn back-btn" onclick="undoLastArrow()">↩️ 刪除/修改上一箭</button>
         <button class="action-btn submit-btn" id="btnUpload" onclick="sendAllToSheets()" style="opacity:0.4;" disabled>💾 請先完成總箭數</button>
     </div>
 
-    <div class="system-footer">
+    <div class="system-footer" id="mainFooter">
         NORTH STAR ARCHERY LAB SYSTEM © 2026<br>
-        DESIGNED BY ROY | VERSION 1.5.2 全景計時並存版
+        DESIGNED BY ROY | VERSION 1.5.3 鏡頭最高畫質與全視界版
     </div>
 </div>
 
@@ -412,7 +420,6 @@
         panel.style.display = (panel.style.display === "block") ? "none" : "block";
     }
 
-    // ✅ 核心修正：切換畫面時，動態將「計時器區塊」移接到返回按鈕旁邊
     function switchMainView() {
         const tWrap = document.getElementById('targetWrapper'); 
         const vWrap = document.getElementById('videoWrapper'); 
@@ -424,7 +431,6 @@
             vWrap.style.display = "flex"; 
             vName.textContent = "🎯 智能靶紙視窗";
             
-            // 將計時器移入錄影上方的專屬格子
             document.getElementById('videoTimerPlaceholder').appendChild(timerZone);
             document.body.classList.add('view-video-mode');
         } else {
@@ -432,7 +438,6 @@
             tWrap.style.display = "flex"; 
             vName.textContent = "📷 開啟錄影畫面";
             
-            // 將計時器歸位回原本的運科面板
             document.getElementById('techGrid').insertBefore(timerZone, document.getElementById('techGrid').firstChild);
             document.body.classList.remove('view-video-mode');
         }
@@ -448,7 +453,6 @@
         tWrap.style.display = "flex"; 
         vName.textContent = "📷 開啟錄影畫面";
         
-        // 確保計時器安全歸位
         document.getElementById('techGrid').insertBefore(timerZone, document.getElementById('techGrid').firstChild);
         document.body.classList.remove('view-video-mode');
     }
@@ -495,7 +499,15 @@
         const isChecked = document.getElementById('chkCamActive').checked;
         const lbl = document.getElementById('camStatusLabel'); const canvas = document.getElementById('camCanvas'); const ctx = canvas.getContext('2d');
         if (isChecked) {
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false })
+            // 🚀 [解析度大提升]：將 ideal 設為 4K/1080P 規格，逼迫硬體抓取最高可支援畫質
+            navigator.mediaDevices.getUserMedia({ 
+                video: { 
+                    facingMode: "user", 
+                    width: { ideal: 4096 }, 
+                    height: { ideal: 2160 } 
+                }, 
+                audio: false 
+            })
             .then(stream => {
                 videoStream = stream;
                 const videoEl = document.getElementById('hiddenVideo'); videoEl.srcObject = stream;
@@ -510,7 +522,7 @@
                     offscreenCanvas.height = realH;
                     
                     frameBuffer.forEach(f => f = null); frameBuffer = [];
-                    console.log(`[運科鏡頭驅動] 成功連接硬體真實比例: ${realW}x${realH}`);
+                    console.log(`[運科鏡頭驅動] 成功連接硬體最高支援比例: ${realW}x${realH}`);
                 };
 
                 function processFrame() {
