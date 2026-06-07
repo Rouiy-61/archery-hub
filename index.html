@@ -153,67 +153,7 @@
 <div class="container">
     <h3>北辰射箭計分系統</h3>
     
-    <div class="setup-overlay">
-    <label style="font-weight: bold; color: var(--gold);">🛠️ 設定</label><br>
-    選手姓名/ID：<input type="text" id="cfgUserName" placeholder="輸入選手名稱" style="width: 150px;"><br>
-    總箭數：
-    <select id="cfgTotalArrows">
-        <option value="36">36 箭</option>
-        <option value="72" selected>72 箭</option>
-    </select><br>
-    ... (原設定維持不變)
-</div>
-
-async function sendAllToSheets() {
-    // 取得選手 ID (對應您試算表的 A 欄)
-    const userId = document.getElementById('cfgUserId').value || "未命名選手";
-    const btn = document.getElementById('btnUpload');
-    
-    btn.disabled = true;
-    btn.textContent = "正在傳送資料庫...";
-
-    let runningTotal = 0; // 用於計算累計總分
-
-    try {
-        for (let index = 0; index < fullRoundData.length; index++) {
-            let endArrows = fullRoundData[index];
-            if (endArrows.length === 0) continue;
-
-            // 1. 計算該趟分數
-            let endScore = endArrows.reduce((sum, a) => sum + a.score, 0);
-            
-            // 2. 更新累計總分
-            runningTotal += endScore;
-            
-            // 3. 打包落點數據
-            let packedArrows = endArrows.map((a, i) => `${a.score}|${Math.round(a.x-150)},${Math.round(a.y-150)}|${i+1}`).join('#');
-
-            // 4. 發送請求 (對應 GAS 的欄位結構)
-            const response = await fetch(GAS_API_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    userId: userId,        // A 欄
-                    endNumber: index + 1,  // C 欄
-                    endScore: endScore,    // D 欄
-                    totalScore: runningTotal, // E 欄
-                    packedArrows: packedArrows // F 欄
-                })
-            });
-            
-            if (!response.ok) throw new Error("傳輸中斷，狀態碼: " + response.status);
-        }
-        
-        alert(`🎉 ${userId} 的訓練資料已成功寫入北辰運科訓練紀錄！`);
-    } catch (e) {
-        console.error(e);
-        alert("同步失敗，請確認 GAS 網址與部署版本是否已更新。");
-    } finally {
-        btn.disabled = false;
-        btn.textContent = "💾 上傳雲端資料庫";
-    }
-}
-</script>
+    <div id="setupPanel" class="setup-overlay">
         <label style="font-weight: bold; color: var(--gold);">🛠️ 本局測驗與計時規格設定</label><br>
         <div style="margin-top: 8px; text-align: left; display: inline-block;">
             選手 ID：<input type="text" id="cfgAthleteId" value="BC-001" style="width: 80px;"><br>
@@ -325,7 +265,8 @@ async function sendAllToSheets() {
 <video id="hiddenVideo" autoplay muted playsinline style="display:none;"></video>
 
 <script>
-    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbwodA__vj2ZrnbR21Rj79KtG1aXpiJbbb6DbHlbEeAPb-D_SsW6DQ-vhCRqIxFYYwOwNg/exec"; 
+    // 經確認已修正為最新的「任何人」權限網址
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzg_PFt2oDBDL8Bboegje5nzpL5zdHuzGsBVyKOXKm9TgWSaFovkeeifm9_EZy0l8RaYw/exec"; 
 
     let TOTAL_ROWS = 0; let TOTAL_ARROWS_LIMIT = 0;
     const TARGET_CENTER = 150;
@@ -711,7 +652,7 @@ async function sendAllToSheets() {
             alert(`🎉 運科大數據同步成功！教練已可在試算表中查看【選手ID: ${GLOBAL_ATHLETE_ID}】的完整智慧風暴圖與延時技術回放！`);
             location.reload();
         } else {
-            alert("同步失敗，可能原因：\n1. 影片檔案過大導致連線超時\n2. 您的 Google 雲端硬碟當日API寫入檔案限制額度已達上限。\n\n💡 提示：明天配額重置後即可正常運作。如欲立刻測試純數據，可於下趟嘗試將『錄影鏡頭』關閉後上傳。");
+            alert("同步失敗，請檢查網路連線或 GAS 雲端流量限制。");
             upBtn.disabled = false; upBtn.style.opacity = "1"; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
         }
     }
