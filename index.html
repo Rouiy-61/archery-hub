@@ -150,86 +150,45 @@
 </head>
 <body>
 
-<div class="container">
-    <h3>北辰射箭計分系統</h3>
-    
-    <div class="setup-overlay">
-    <label style="font-weight: bold; color: var(--gold);">🛠️ 設定</label><br>
-    選手姓名/ID：<input type="text" id="cfgUserName" placeholder="輸入選手名稱" style="width: 150px;"><br>
-    總箭數：
-    <select id="cfgTotalArrows">
-        <option value="36">36 箭</option>
-        <option value="72" selected>72 箭</option>
-    </select><br>
-    ... (原設定維持不變)
+<div class="setup-overlay" id="setupPanel">
+    <label style="font-weight: bold; color: var(--gold);">🛠️ 本局測驗與計時規格設定</label><br>
+    <div style="margin-top: 8px; text-align: left; display: inline-block;">
+        選手 ID：<input type="text" id="cfgAthleteId" value="BC-001" style="width: 80px;"><br>
+        選手姓名：<input type="text" id="cfgUserId" value="未輸入" style="width: 80px;"><br>
+        總箭數：
+        <select id="cfgTotalArrows" style="width: 94px;">
+            <option value="36">36 箭 (6組)</option>
+            <option value="72" selected>72 箭 (12組)</option>
+            <option value="18">18 箭 (3組)</option>
+            <option value="6">6 箭 (1組測試)</option>
+        </select><br>
+        預備時間：<input type="number" id="cfgPrepSec" value="10" style="width: 40px;"> 秒<br>
+        射擊時間：<input type="number" id="cfgShootSec" value="90" style="width: 40px;"> 秒
+    </div>
+    <br>
+    <button onclick="startSession()" id="btnStartGame" style="margin-top:12px; padding:10px; width:90%; font-size:15px; font-weight:bold; background: linear-gradient(135deg, #e67e22, #d35400); color:white; border:none; border-radius:6px; cursor:pointer;">🎯 開局！</button>
 </div>
 
-<button onclick="startSession()" id="btnStartGame">開局！</button>
+<div class="score-table-container">
+    <table>
+        <thead>
+            <tr>
+                <th>組</th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>本組</th><th>累計</th>
+            </tr>
+        </thead>
+        <tbody id="scoreTableBody"></tbody>
+    </table>
+</div>
 
-<script>
-    // 1. 開局函數 (您的原代碼應該在這裡)
-    function startSession() {
-        // ...
-    }
-
-    // 2. 傳輸函數 (剛剛修正好的這一整段)
-    async function sendAllToSheets() {
-        const userId = document.getElementById('cfgAthleteId').value || "未命名選手"; 
-        const btn = document.getElementById('btnUpload');
-        btn.disabled = true;
-        btn.textContent = "正在傳送資料庫...";
-
-        let runningTotal = 0;
-        try {
-            for (let index = 0; index < fullRoundData.length; index++) {
-                // ... (其餘邏輯與我上面提供的一致)
-            }
-            alert(`🎉 資料已成功寫入！`);
-        } catch (e) {
-            console.error(e);
-            alert("同步失敗。");
-        } finally {
-            btn.disabled = false;
-            btn.textContent = "💾 上傳雲端資料庫";
-        }
-    }
-</script>
-        <label style="font-weight: bold; color: var(--gold);">🛠️ 本局測驗與計時規格設定</label><br>
-        <div style="margin-top: 8px; text-align: left; display: inline-block;">
-            選手 ID：<input type="text" id="cfgAthleteId" value="BC-001" style="width: 80px;"><br>
-            選手姓名：<input type="text" id="cfgUserId" value="未輸入" style="width: 80px;"><br>
-            總箭數：
-            <select id="cfgTotalArrows" style="width: 94px;">
-                <option value="36">36 箭 (6組)</option>
-                <option value="72" selected>72 箭 (12組)</option>
-                <option value="18">18 箭 (3組)</option>
-                <option value="6">6 箭 (1組測試)</option>
-            </select><br>
-            預備時間：<input type="number" id="cfgPrepSec" value="10" style="width: 40px;"> 秒<br>
-            射擊時間：<input type="number" id="cfgShootSec" value="90" style="width: 40px;"> 秒
+<div class="tech-grid">
+    <div class="timer-zone">
+        <div id="timerContainer" class="timer-box" onclick="toggleTimer()">
+            <div id="timerDisplay" class="timer-digital">10</div>
+            <div id="timerStatus" class="timer-status">⏱️ 點擊啟動</div>
         </div>
-        <button onclick="startSession()" id="btnStartGame" style="margin-top:12px; padding:10px; width:90%; font-size:15px; font-weight:bold; background: linear-gradient(135deg, #e67e22, #d35400); color:white; border:none; border-radius:6px; cursor:pointer;">🎯 開局！</button>
+        <button class="reset-btn" onclick="resetTimer()">🔄 手動重置</button>
     </div>
-
-    <div class="score-table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th>組</th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>本組</th><th>累計</th>
-                </tr>
-            </thead>
-            <tbody id="scoreTableBody"></tbody>
-        </table>
     </div>
-
-    <div class="tech-grid">
-        <div class="timer-zone">
-            <div id="timerContainer" class="timer-box" onclick="toggleTimer()">
-                <div id="timerDisplay" class="timer-digital">10</div>
-                <div id="timerStatus" class="timer-status">⏱️ 點擊啟動</div>
-            </div>
-            <button class="reset-btn" onclick="resetTimer()">🔄 手動重置</button>
-        </div>
         
         <div class="metrics-box" onclick="toggleDescPanel()">
             <div class="metric-line">🎯 當組偏移: <span id="mAccuracy">--</span></div>
