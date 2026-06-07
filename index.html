@@ -157,7 +157,7 @@
         <label style="font-weight: bold; color: var(--gold);">🛠️ 本局測驗與計時規格設定</label><br>
         <div style="margin-top: 8px; text-align: left; display: inline-block;">
             選手 ID：<input type="text" id="cfgAthleteId" value="BC-001" style="width: 80px;"><br>
-            選手姓名：<input type="text" id="cfgUserId" value="未輸入" style="width: 80px;"><br>
+            選手姓名：<input type="text" id="cfgUserId" value="邱柏恩" style="width: 80px;"><br>
             總箭數：
             <select id="cfgTotalArrows" style="width: 94px;">
                 <option value="36">36 箭 (6組)</option>
@@ -175,7 +175,7 @@
         <table>
             <thead>
                 <tr>
-                    <th>趟</th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>本趟</th><th>累計</th>
+                    <th>組</th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>本組</th><th>累計</th>
                 </tr>
             </thead>
             <tbody id="scoreTableBody"></tbody>
@@ -237,7 +237,7 @@
                     <input type="checkbox" id="chkCamActive" onchange="toggleCameraHardware()"> 📷 開啟錄影鏡頭
                 </label>
                 <button class="btn-view-switch" onclick="switchMainView()">
-                    🔄 切換顯示：<span id="currentViewName" style="color:var(--gold);">📷 開啟錄影畫面</span>
+                    🔄 切換顯示：<span id="currentViewName" style="color:var(--gold);">🎯 智能靶紙視窗</span>
                 </button>
             </div>
         </div>
@@ -258,7 +258,7 @@
 
     <div class="system-footer">
         NORTH STAR ARCHERY LAB SYSTEM © 2026<br>
-        DESIGNED BY ROY | VERSION 1.4.3 
+        DESIGNED BY ROY | VERSION 1.4.3 運科多媒體直傳版
     </div>
 </div>
 
@@ -477,7 +477,7 @@
             const RING_RADII = [
                 { r: 7.5, score: 10, display: "X" }, { r: 15, score: 10, display: "10" }, { r: 30, score: 9, display: "9" },   
                 { r: 45, score: 8, display: "8" },   { r: 60, score: 7, display: "7" },   { r: 75, score: 6, display: "6" },   
-                { r: 90, score: 5, display: "5" },   { r: 105, score: 4, display: "4" },  { r: 120, score: 3, display: "3" },  
+                { r: 90, score: 5, display: "5" },   { r: 105, score: 4, display: "4" },  { r: 120, stroke: 3, display: "3" },  
                 { r: 135, score: 2, display: "2" },  { r: 150, score: 1, display: "1" }
             ];
             for (let zone of RING_RADII) { if (distance <= zone.r) { res = zone; break; } }
@@ -514,7 +514,6 @@
         } else { document.getElementById('mPrecision').textContent = "--"; }
     }
 
-    // 修正：補全被截斷的箭頭渲染邏輯
     function renderClustersAndArrows() {
         const clusterGroup = document.getElementById('clusterLayerGroup'); const arrowGroup = document.getElementById('arrowGroup');
         clusterGroup.innerHTML = ""; arrowGroup.innerHTML = "";
@@ -530,113 +529,133 @@
             }
             validArrows.forEach((arrow) => {
                 const c = document.createElementNS("http://www.w3.org/2000/svg", "circle"); c.setAttribute("cx", arrow.x); c.setAttribute("cy", arrow.y); c.setAttribute("r", "3.5");
-                if (arrow.display === "M") { 
-                    c.setAttribute("fill", "#ff3333"); c.setAttribute("stroke", "#ffffff");
-                } else {
-                    c.setAttribute("fill", STORM_COLORS[eIdx % 6].inner); c.setAttribute("stroke", "#ffffff");
-                }
-                c.setAttribute("stroke-width", "0.7"); arrowGroup.appendChild(c);
+                if (arrow.display === "M") { c.setAttribute("fill", "rgba(231, 76, 60, 0.8)"); c.setAttribute("stroke", "#ffaaaa"); } 
+                else { c.setAttribute("fill", STORM_COLORS[eIdx % 6].inner); c.setAttribute("stroke", "#fff"); }
+                c.setAttribute("stroke-width", "0.8"); arrowGroup.appendChild(c);
             });
         });
     }
 
-    // 補全：計算每組分數及累計分數的邏輯
     function recalculateTotals() {
-        let runningTotal = 0;
+        let runningSum = 0;
         for (let e = 0; e < TOTAL_ROWS; e++) {
-            let endSum = 0;
-            let arrowsRecorded = 0;
-            for (let a = 0; a < 6; a++) {
-                if (fullRoundData[e] && fullRoundData[e][a]) {
-                    endSum += fullRoundData[e][a].score;
-                    arrowsRecorded++;
-                }
-            }
-            runningTotal += endSum;
-            document.getElementById(`endTotal-${e}`).textContent = endSum;
-            document.getElementById(`runTotal-${e}`).textContent = runningTotal;
+            let endSum = fullRoundData[e].reduce((sum, a) => sum + (a ? a.score : 0), 0); document.getElementById(`endTotal-${e}`).textContent = endSum;
+            if (fullRoundData[e].length > 0) { runningSum += endSum; document.getElementById(`runTotal-${e}`).textContent = runningSum; } else { document.getElementById(`runTotal-${e}`).textContent = "-"; }
         }
     }
 
-    // 補全：退回上一箭的復原控制邏輯
     function undoLastArrow() {
-        if (globalArrowCount <= 0) return;
-        
-        // 計算上一箭的指標位置
-        if (currentIndex === 0) {
-            currentEnd--;
-            currentIndex = 5;
-        } else {
-            currentIndex--;
+        if (globalArrowCount === 0) return;
+        if (currentIndex === 0) { currentEnd--; currentIndex = 5; } else { currentIndex--; }
+        fullRoundData[currentEnd].pop(); globalArrowCount--; document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = "-";
+        recalculateTotals(); handleLayerAndMetricsChange(); updateActiveHighlight();
+        if (globalArrowCount < TOTAL_ARROWS_LIMIT) {
+            const upBtn = document.getElementById('btnUpload'); upBtn.disabled = true; upBtn.style.opacity = "0.4"; upBtn.textContent = "💾 請先完成總箭數";
         }
-        
-        fullRoundData[currentEnd][currentIndex] = undefined;
-        globalArrowCount--;
-        
-        document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = "-";
-        
-        // 恢復上傳按鈕狀態
-        const upBtn = document.getElementById('btnUpload');
-        upBtn.disabled = true;
-        upBtn.style.opacity = "0.4";
-        upBtn.textContent = "💾 請先完成總箭數";
-        
-        recalculateTotals();
-        handleLayerAndMetricsChange();
-        updateActiveHighlight();
     }
 
-    // 補全：向 Google Sheets API 直傳資料的邏輯
-    function sendAllToSheets() {
-        const upBtn = document.getElementById('btnUpload');
-        upBtn.disabled = true;
-        upBtn.textContent = "⚡ 資料同步中...";
-        
-        // 將二維結構平坦化為一維箭著點紀錄，以便進行資料庫正規化儲存
-        let flatArrows = [];
-        fullRoundData.forEach((endArrows, eIdx) => {
-            endArrows.forEach((a, aIdx) => {
-                if (a) {
-                    flatArrows.push({
-                        athleteId: GLOBAL_ATHLETE_ID,
-                        userName: GLOBAL_USER_NAME,
-                        totalArrowsLimit: TOTAL_ARROWS_LIMIT,
-                        endNum: eIdx + 1,
-                        arrowNum: aIdx + 1,
-                        scoreDisplay: a.display,
-                        scoreValue: a.score,
-                        x: parseFloat(a.x.toFixed(2)),
-                        y: parseFloat(a.y.toFixed(2)),
-                        distanceFromCenter: parseFloat(a.dist.toFixed(2))
-                    });
-                }
-            });
+    function getStormImageBase64() {
+        const svgElement = document.getElementById('archeryTarget'); const serializer = new XMLSerializer();
+        let svgString = serializer.serializeToString(svgElement);
+        let svgBlob = new Blob([svgString], {type: 'image/svg+xml;charset=utf-8'});
+        return new Promise((resolve) => {
+            let reader = new FileReader(); reader.readAsDataURL(svgBlob);
+            reader.onloadend = function() { resolve(reader.result); };
         });
+    }
 
-        // 發送 POST 請求傳送完整的 JSON 封包
-        fetch(GAS_API_URL, {
-            method: "POST",
-            mode: "cors",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ action: "uploadRound", data: flatArrows })
-        })
-        .then(res => res.json())
-        .then(result => {
-            if (result.status === "success" || result.result === "success") {
-                alert("🎉 資料庫同步完成！本局計分已成功存檔。");
-                upBtn.textContent = "✅ 上傳成功";
-            } else {
-                throw new Error(result.message || "伺服器拒絕請求");
+    function getRecordedVideoBase64() {
+        return new Promise((resolve) => {
+            if (frameBuffer.length === 0) { resolve(null); return; }
+            let recCanvas = document.createElement('canvas'); recCanvas.width = 320; recCanvas.height = 240; let recCtx = recCanvas.getContext('2d');
+            let stream = recCanvas.captureStream(24); 
+            let mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+            let chunks = [];
+            
+            mediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+            mediaRecorder.onstop = () => {
+                let bigBlob = new Blob(chunks, { type: 'video/webm' });
+                let reader = new FileReader(); reader.readAsDataURL(bigBlob);
+                reader.onloadend = () => resolve(reader.result);
+            };
+            mediaRecorder.start();
+            
+            let frameIdx = 0;
+            function playNextFrame() {
+                if (frameIdx < frameBuffer.length) {
+                    recCtx.putImageData(frameBuffer[frameIdx], 0, 0); frameIdx++;
+                    setTimeout(playNextFrame, 1000 / 24);
+                } else { mediaRecorder.stop(); }
             }
-        })
-        .catch(err => {
-            console.error(err);
-            alert("❌ 傳送失敗，請確認網路連線或 GAS 權限部署是否有誤。\n錯誤： " + err.message);
-            upBtn.disabled = false;
-            upBtn.textContent = "🔺 重試上傳雲端";
+            playNextFrame();
         });
+    }
+
+    async function sendAllToSheets() {
+        const upBtn = document.getElementById('btnUpload');
+        upBtn.disabled = true; upBtn.style.opacity = "0.5";
+        upBtn.textContent = "⚡ 運科多媒體打包中 (請勿關閉網頁)...";
+
+        const stormImgData = await getStormImageBase64();
+        const videoData = await getRecordedVideoBase64();
+
+        let sharedVideoUrl = "無影片";
+        let uploadSuccess = true;
+
+        for (let index = 0; index < fullRoundData.length; index++) {
+            let endArrows = fullRoundData[index];
+            if (!endArrows || endArrows.length === 0) continue;
+
+            upBtn.textContent = `⚡ 正在同步第 ${index + 1} / ${fullRoundData.length} 趟數據...`;
+
+            let endScore = endArrows.reduce((sum, a) => sum + a.score, 0);
+            let arrowDataString = endArrows.map((a, i) => `${a.score}|${Math.round(a.x-TARGET_CENTER)},${Math.round(a.y-TARGET_CENTER)}|${i+1}`).join('#');
+            let packedArrows = `100|0,0|0$${arrowDataString}`;
+
+            let payload = {
+                action: "save_training_v3",
+                athleteId: GLOBAL_ATHLETE_ID,
+                userId: GLOBAL_USER_NAME,
+                endNumber: index + 1,
+                endScore: endScore,
+                packedArrows: packedArrows,
+                stormImageBase64: stormImgData,
+                videoBase64: (sharedVideoUrl === "無影片") ? videoData : null, 
+                videoUrlPrevious: sharedVideoUrl
+            };
+
+            try {
+                let response = await fetch(GAS_API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "text/plain" },
+                    body: JSON.stringify(payload)
+                });
+                let resJson = await response.json();
+                
+                if (resJson.status === "success") {
+                    if (resJson.videoUrl && resJson.videoUrl !== "無影片") {
+                        sharedVideoUrl = resJson.videoUrl; 
+                    }
+                } else {
+                    console.error("GAS 後端錯誤:", resJson.message);
+                    uploadSuccess = false;
+                    break;
+                }
+            } catch (err) {
+                console.error("網路傳輸失敗:", err);
+                uploadSuccess = false;
+                break;
+            }
+        }
+
+        if (uploadSuccess) {
+            alert(`🎉 運科大數據同步成功！教練已可在試算表中查看【選手ID: ${GLOBAL_ATHLETE_ID}】的完整智慧風暴圖與延時技術回放！`);
+            location.reload();
+        } else {
+            alert("同步失敗，請檢查網路連線或 GAS 雲端流量限制。");
+            upBtn.disabled = false; upBtn.style.opacity = "1"; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
+        }
     }
 </script>
 </body>
 </html>
-
