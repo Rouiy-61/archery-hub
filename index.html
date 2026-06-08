@@ -634,81 +634,201 @@
     }
 
     // 🎯 智能點靶、縮放與運科指標連動核心
-    let scale = 1, posX = 0, posY = 0; let isDragging = false; let startX = 0, startY = 0; let touchStartDist = 0;
+   let scale = 1;
+    // 🎯 智能點靶與運科連動核心
     function initPanZoomTarget() {
-        const targetSvg = document.getElementById('archeryTarget'); const holder = document.getElementById('svgHolder');
-        function applyTransform() { targetSvg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`; }
-        
-        holder.addEventListener('touchstart', function(e) {
-            if (e.touches.length === 2) { isDragging = false; touchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); } 
-            else if (e.touches.length === 1) { if (!document.getElementById('chkScoreMode').checked) { isDragging = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY; } }
-        }, { passive: true });
-        
-        holder.addEventListener('touchmove', function(e) {
-            if (e.touches.length === 2 && touchStartDist > 0) {
-                let dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); let rect = holder.getBoundingClientRect();
-                let midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left; let midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-                let oldScale = scale; let factor = dist / touchStartDist; scale = Math.max(1, Math.min(12, scale * factor));
-                posX = midX - (midX - posX) * (scale / oldScale); posY = midY - (midY - posY) * (scale / oldScale); touchStartDist = dist; applyTransform();
-            } else if (e.touches.length === 1 && isDragging) { posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY; applyTransform(); }
-        }, { passive: true });
-        
-        holder.addEventListener('touchend', function(e) { if (e.touches.length < 2) touchStartDist = 0; if (e.touches.length === 0) isDragging = false; });
+        const svg = document.getElementById('archeryTarget');
+        svg.addEventListener('click', function(e) {
+            if (!document.getElementById('chkScoreMode').checked) return;
 
-        // 精確落點解算
-        targetSvg.onpointerdown = function(e) {
-            ensureAudioContext(); 
-            if (!document.getElementById('chkScoreMode').checked) return; 
-            if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
+            // 1. 取得點擊相對 SVG 的精確座標
+            const pt = svg.createSVGPoint();
+            pt.x = e.clientX; pt.y = e.clientY;
+            const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
             
-            const rect = targetSvg.getBoundingClientRect(); 
-            const svgX = ((e.clientX - rect.left) / rect.width) * 300; 
-            const svgY = ((e.clientY - rect.top) / rect.height) * 300;
-            if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) return; 
+            // 2. 計算得分
+            const score = calculateScore(svgP.x, svgP.y);
+            if (score === null) return; // 點擊無效區域
 
-            const targetType = document.getElementById('targetSizeSelect').value;
-            let finalScore = 0; let finalDisplay = "M"; let finalDistance = 0;
-
-            // 分流解算不同規格的得分
-            if (targetType === "triple_target") {
-                // 三環靶：找出離哪一個靶心最近
-                const subCenters = [60, 150, 240];
-                let closestCenterY = 150; let minD = 999;
-                subCenters.forEach(cy => {
-                    let d = Math.sqrt(Math.pow(svgX - 150, 2) + Math.pow(svgY - cy, 2));
-                    if (d < minD) { minD = d; closestCenterY = cy; }
-                });
-                finalDistance = minD;
-                // 三環靶半徑對應：總半徑 42 為 6分環，以此類推等分 5 區 (6,7,8,9,10分)
-                let step = 42 / 5;
-                if (finalDistance <= step * 0.5) { finalScore = 10; finalDisplay = "X"; }
-                else if (finalDistance <= step) { finalScore = 10; finalDisplay = "10"; }
-                else if (finalDistance <= step * 2) { finalScore = 9; finalDisplay = "9"; }
-                else if (finalDistance <= step * 3) { finalScore = 8; finalDisplay = "8"; }
-                else if (finalDistance <= step * 4) { finalScore = 7; finalDisplay = "7"; }
-                else if (finalDistance <= step * 5) { finalScore = 6; finalDisplay = "6"; }
-            } else {
-                // 標準單靶與複合弓六環靶
-                finalDistance = Math.sqrt(Math.pow(svgX - 150, 2) + Math.pow(svgY - 150, 2));
-                const LINE_B = 0.4;
-                const RING_RADII = [
-                    { r: 7.5 + LINE_B, score: 10, display: "X" }, { r: 15 + LINE_B, score: 10, display: "10" }, 
-                    { r: 30 + LINE_B, score: 9, display: "9" },   { r: 45 + LINE_B, score: 8, display: "8" }, 
-                    { r: 60 + LINE_B, score: 7, display: "7" },   { r: 75 + LINE_B, score: 6, display: "6" }, 
-                    { r: 90 + LINE_B, score: 5, display: "5" },   { r: 105 + LINE_B, score: 4, display: "4" }, 
-                    { r: 120 + LINE_B, score: 3, display: "3" },  { r: 135 + LINE_B, score: 2, display: "2" }, 
-                    { r: 150 + LINE_B, score: 1, display: "1" }
-                ];
+            // 3. 數據入庫與 UI 更新
+            if (currentEnd < TOTAL_ROWS) {
+                fullRoundData[currentEnd].push({ score: score, x: svgP.x, y: svgP.y });
+                updateScoreTable();
+                drawArrowOnTarget(svgP.x, svgP.y, score);
                 
-                let detected = false;
-                for (let zone of RING_RADII) { 
-                    if (finalDistance <= zone.r) { 
-                        finalScore = zone.score; finalDisplay = zone.display; detected = true; break; 
-                    } 
+                currentIndex++;
+                if (currentIndex >= ARROWS_PER_END) {
+                    currentEnd++; currentIndex = 0;
                 }
-                // 複合弓截斷保護（低於5分即為脫靶）
-                if (targetType === "50m_compound" && finalScore < 5) { finalScore = 0; finalDisplay = "M"; }
+                updateActiveHighlight();
+                updateSportMetrics();
             }
+        });
+    }
+
+    function calculateScore(x, y) {
+        const targetType = document.getElementById('targetSizeSelect').value;
+        let centers = [];
+        
+        // 定義各靶型靶心座標
+        if (targetType === "triple_target") {
+            centers = [{x: 150, y: 60, min: 6}, {x: 150, y: 150, min: 6}, {x: 150, y: 240, min: 6}];
+        } else {
+            centers = [{x: 150, y: 150, min: 1}];
+        }
+
+        let bestDist = Infinity;
+        let targetCenter = centers[0];
+        centers.forEach(p => {
+            let d = Math.sqrt(Math.pow(x - p.x, 2) + Math.pow(y - p.y, 2));
+            if (d < bestDist) { bestDist = d; targetCenter = p; }
+        });
+
+        // 環寬換算 (基於 300x300 viewBox，標準靶 10環半徑為 150)
+        const ringWidth = (targetType === "triple_target") ? 8.4 : 15;
+        let score = 10 - Math.floor(bestDist / ringWidth);
+        
+        if (score < targetCenter.min) return 0; // Miss
+        return Math.max(0, score);
+    }
+
+    function updateScoreTable() {
+        const cell = document.getElementById(`cell-${currentEnd}-${currentIndex}`);
+        const score = fullRoundData[currentEnd][currentIndex].score;
+        cell.textContent = score === 0 ? 'M' : score;
+        
+        // 計算該趟總分
+        let endSum = fullRoundData[currentEnd].reduce((a, b) => a + b.score, 0);
+        document.getElementById(`endTotal-${currentEnd}`).textContent = endSum;
+    }
+
+    function updateSportMetrics() {
+        // 簡單運算邏輯：計算所有已記錄箭支的平均偏移與密度
+        const allArrows = fullRoundData.flat();
+        if (allArrows.length === 0) return;
+
+        let avgX = allArrows.reduce((a, b) => a + b.x, 0) / allArrows.length;
+        let avgY = allArrows.reduce((a, b) => a + b.y, 0) / allArrows.length;
+        let dist = Math.sqrt(Math.pow(avgX - 150, 2) + Math.pow(avgY - 150, 2)).toFixed(1);
+
+        document.getElementById('mAccuracy').textContent = dist + " px";
+        document.getElementById('mEndAvg').textContent = (allArrows.reduce((a, b) => a + b.score, 0) / allArrows.length).toFixed(2);
+    }
+
+    function drawArrowOnTarget(x, y, score) {
+        const group = document.getElementById('arrowGroup');
+        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        circle.setAttribute("cx", x); circle.setAttribute("cy", y);
+        circle.setAttribute("r", 4);
+        circle.setAttribute("fill", score >= 9 ? "#ffd700" : "#fff");
+        circle.setAttribute("stroke", "#000");
+        group.appendChild(circle);
+    }
+</script>
+   function initPanZoomTarget() {
+    const targetSvg = document.getElementById('archeryTarget');
+    targetSvg.style.pointerEvents = "all"; 
+
+    targetSvg.onpointerdown = function(e) {
+        ensureAudioContext(); 
+        if (!document.getElementById('chkScoreMode').checked) return; 
+        if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
+        
+        const rect = targetSvg.getBoundingClientRect(); 
+        // 取得相對於 viewBox (0-300) 的座標
+        const svgX = ((e.clientX - rect.left) / rect.width) * 300; 
+        const svgY = ((e.clientY - rect.top) / rect.height) * 300;
+        
+        if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) return;
+
+        const targetType = document.getElementById('targetSizeSelect').value;
+        let finalScore = 0; let finalDisplay = "M"; let finalDistance = 0;
+
+        // 1. 計算距離 (針對三環靶或單靶做分流)
+        if (targetType === "triple_target") {
+            const subCenters = [60, 150, 240];
+            let minD = 999;
+            subCenters.forEach(cy => {
+                let d = Math.sqrt(Math.pow(svgX - 150, 2) + Math.pow(svgY - cy, 2));
+                if (d < minD) minD = d;
+            });
+            finalDistance = minD;
+        } else {
+            finalDistance = Math.sqrt(Math.pow(svgX - 150, 2) + Math.pow(svgY - 150, 2));
+        }
+
+        // 2. 判定是否在靶紙半徑內 (假設有效區半徑為 150)
+        if (finalDistance <= 150) {
+            // 執行您系統原有的分數解算函數 (請確保此函數有依據距離回傳分數)
+            const result = calculateScoreByDistance(targetType, finalDistance);
+            finalScore = result.score;
+            finalDisplay = result.display;
+        } else {
+            // 超過半徑，判定為脫靶
+            finalScore = 0;
+            finalDisplay = "M";
+        }
+
+        // 3. 記錄並更新畫面
+        recordArrow(finalDisplay, svgX, svgY, finalScore);
+    };
+}
+
+// 輔助函數：根據距離計算環數
+function calculateScoreByDistance(type, dist) {
+    // 這裡放入您之前邏輯中的環數對應表
+    // 若為 triple_target，分級邏輯應為 42/5 = 8.4 一級
+    // 若為 standard，則依照環數半徑表
+    // ... 依照您目前的邏輯實作即可 ...
+    return { score: finalScore, display: finalDisplay };
+}
+        // 精確落點解算
+      targetSvg.onpointerdown = function(e) {
+    ensureAudioContext(); 
+    if (!document.getElementById('chkScoreMode').checked) return; 
+    if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
+    
+    const rect = targetSvg.getBoundingClientRect(); 
+    const svgX = ((e.clientX - rect.left) / rect.width) * 300; 
+    const svgY = ((e.clientY - rect.top) / rect.height) * 300;
+    
+    // 防呆：如果點擊區域完全超出畫布 (例如點到外部元件)
+    if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) return;
+
+    const targetType = document.getElementById('targetSizeSelect').value;
+    let finalScore = 0; let finalDisplay = "M";
+
+    // --- 1. 計算距離 ---
+    let finalDistance = 0;
+    if (targetType === "triple_target") {
+        const subCenters = [60, 150, 240];
+        let minD = 999;
+        subCenters.forEach(cy => {
+            let d = Math.sqrt(Math.pow(svgX - 150, 2) + Math.pow(svgY - cy, 2));
+            if (d < minD) minD = d;
+        });
+        finalDistance = minD;
+    } else {
+        finalDistance = Math.sqrt(Math.pow(svgX - 150, 2) + Math.pow(svgY - 150, 2));
+    }
+
+    // --- 2. 核心判定邏輯：靶內記分 vs 靶外記 M ---
+    // 假設靶紙邊界半徑為 150 (根據您的 viewBox="0 0 300 300")
+    if (finalDistance <= 150) {
+        // 在靶內：執行您原有的環數解算 (放入原本那一大串 if/else 或 loop)
+        // 建議這裡呼叫一個函數處理環數，例如：
+        const result = calculateActualScore(targetType, finalDistance); 
+        finalScore = result.score;
+        finalDisplay = result.display;
+    } else {
+        // 【核心修改】：靶紙外強制記 M
+        finalScore = 0;
+        finalDisplay = "M";
+    }
+
+    // --- 3. 執行記錄 ---
+    recordArrow(finalDisplay, svgX, svgY, finalScore);
+};
 
             // 寫入全域資料結構
             fullRoundData[currentEnd][currentIndex] = { 
