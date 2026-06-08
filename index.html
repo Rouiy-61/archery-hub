@@ -1,6 +1,5 @@
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzg_PFt2oDBDL8Bboegje5nzpL5zdHuzGsBVyKOXKm9TgWSaFovkeeifm9_EZy0l8RaYw/exec"; 
 
-// 國際賽規格連動定義
 const MATCH_CONFIGS = {
     double_72: { total: 72, perEnd: 6 },
     single_36: { total: 36, perEnd: 6 },
@@ -10,7 +9,7 @@ const MATCH_CONFIGS = {
 
 let TOTAL_ROWS = 0; 
 let TOTAL_ARROWS_LIMIT = 0;
-let ARROWS_PER_END = 6; // 每趟箭數（動態 3 或 6 箭）
+let ARROWS_PER_END = 6; 
 const TARGET_CENTER = 150;
 let fullRoundData = [];
 let currentEnd = 0, currentIndex = 0, globalArrowCount = 0;
@@ -26,6 +25,97 @@ const STORM_COLORS = [
     { inner: "rgba(46, 204, 113, 0.45)", outer: "rgba(46, 204, 113, 0.12)" },
     { inner: "rgba(241, 196, 15, 0.45)", outer: "rgba(241, 196, 15, 0.12)" }
 ];
+
+// 💾 【新增】將當前狀態自動儲存到手機 localStorage
+function saveToLocalStorage() {
+    const sessionState = {
+        athleteId: GLOBAL_ATHLETE_ID,
+        userName: GLOBAL_USER_NAME,
+        matchType: document.getElementById('matchTypeSelect').value,
+        targetSize: document.getElementById('targetSizeSelect').value,
+        totalArrows: TOTAL_ARROWS_LIMIT,
+        arrowsPerEnd: ARROWS_PER_END,
+        totalRows: TOTAL_ROWS,
+        currentEnd: currentEnd,
+        currentIndex: currentIndex,
+        globalArrowCount: globalArrowCount,
+        fullRoundData: fullRoundData,
+        prepSec: document.getElementById('cfgPrepSec').value,
+        shootSec: document.getElementById('cfgShootSec').value
+    };
+    localStorage.setItem("beichen_archery_autosave", JSON.stringify(sessionState));
+}
+
+// 📂 【新增】從手機讀取上一次未完成的測驗資料
+function loadFromLocalStorage() {
+    const savedData = localStorage.getItem("beichen_archery_autosave");
+    if (!savedData) return false;
+
+    try {
+        const state = JSON.parse(savedData);
+        
+        // 還原全域參數
+        GLOBAL_ATHLETE_ID = state.athleteId;
+        GLOBAL_USER_NAME = state.userName;
+        TOTAL_ARROWS_LIMIT = state.totalArrows;
+        ARROWS_PER_END = state.arrowsPerEnd;
+        TOTAL_ROWS = state.totalRows;
+        currentEnd = state.currentEnd;
+        currentIndex = state.currentIndex;
+        globalArrowCount = state.globalArrowCount;
+        fullRoundData = state.fullRoundData;
+
+        // 還原 UI 輸入框數值
+        document.getElementById('cfgAthleteId').value = state.athleteId;
+        document.getElementById('cfgUserId').value = state.userName;
+        document.getElementById('matchTypeSelect').value = state.matchType;
+        document.getElementById('targetSizeSelect').value = state.targetSize;
+        document.getElementById('totalArrowsInput').value = state.totalArrows;
+        document.getElementById('arrowsPerEndInput').value = state.arrowsPerEnd;
+        document.getElementById('cfgPrepSec').value = state.prepSec;
+        document.getElementById('cfgShootSec').value = state.shootSec;
+
+        // 隱藏設定面板並初始化界面
+        document.getElementById('setupPanel').style.display = 'none';
+        document.getElementById('timerDisplay').textContent = state.prepSec;
+        handleMatchTypeChange();
+
+        // 重構表格與歷史落點
+        initTable();
+        // 將備份的分數填回畫面表格
+        for (let e = 0; e < TOTAL_ROWS; e++) {
+            if (!fullRoundData[e]) continue;
+            for (let a = 0; a < ARROWS_PER_END; a++) {
+                const arrow = fullRoundData[e][a];
+                if (arrow) {
+                    document.getElementById(`cell-${e}-${a}`).textContent = arrow.display;
+                }
+            }
+        }
+
+        initToggleCheckboxes();
+        initPanZoomTarget();
+        updateSvgTargetSkin();
+        recalculateTotals();
+        handleLayerAndMetricsChange();
+        updateActiveHighlight();
+
+        // 如果載入時就已經滿箭，把上傳按鈕打開
+        if (globalArrowCount >= TOTAL_ARROWS_LIMIT) {
+            const upBtn = document.getElementById('btnUpload');
+            upBtn.disabled = false;
+            upBtn.style.opacity = "1";
+            upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
+            document.getElementById('chkScoreMode').checked = false;
+        }
+
+        alert(`📂 已自動恢復上一次「${GLOBAL_USER_NAME}」未完成的測驗紀錄！`);
+        return true;
+    } catch (e) {
+        console.error("讀取本地存檔失敗:", e);
+        return false;
+    }
+}
 
 function handleMatchTypeChange() {
     const type = document.getElementById('matchTypeSelect').value;
@@ -87,6 +177,8 @@ function startSession() {
     initToggleCheckboxes(); 
     initPanZoomTarget(); 
     updateSvgTargetSkin();
+    
+    saveToLocalStorage(); // 💾 初始開局存檔一次
 }
 
 function initTable() {
@@ -315,11 +407,10 @@ function updateSvgTargetSkin() {
     }
 }
 
-// 🎯 改版核心：智能點靶、縮放與跨邊界黑區點靶解算
 let scale = 1, posX = 0, posY = 0; let isDragging = false; let startX = 0, startY = 0; let touchStartDist = 0;
 function initPanZoomTarget() {
     const targetSvg = document.getElementById('archeryTarget'); 
-    const holder = document.getElementById('svgHolder'); // 👈 改為對大黑框進行操作
+    const holder = document.getElementById('svgHolder');
     
     function applyTransform() { targetSvg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`; }
     
@@ -362,32 +453,23 @@ function initPanZoomTarget() {
         if (e.touches.length === 0) isDragging = false; 
     });
 
-    // 🚀 【核心修正點】：點擊事件改綁在整個大黑框（holder），以解決點到畫布外黑色區域無法計分的問題
     holder.onpointerdown = function(e) {
         ensureAudioContext(); 
         if (!document.getElementById('chkScoreMode').checked) return; 
         if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
         
-        // 利用 SVG 內建的 getScreenCTM() 與 inverse() 矩陣，精確反推不論平移或縮放後，螢幕點擊點對應到 SVG 內部 (0~300) 的真實坐標
         const pt = targetSvg.createSVGPoint();
-        pt.x = e.clientX;
-        pt.y = e.clientY;
-        
+        pt.x = e.clientX; pt.y = e.clientY;
         const svgP = pt.matrixTransform(targetSvg.getScreenCTM().inverse());
-        const svgX = svgP.x;
-        const svgY = svgP.y;
+        const svgX = svgP.x; const svgY = svgP.y;
 
         const targetType = document.getElementById('targetSizeSelect').value;
         let finalScore = 0; let finalDisplay = "M"; let finalDistance = 0;
 
-        // 判斷是否落點在外圍黑色無效區域 (超出 0~300 邊界)
         if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) {
-            // 💡 直接判定脫靶 M，距離設定為靶心到邊緣最大邊界
-            finalScore = 0;
-            finalDisplay = "M";
+            finalScore = 0; finalDisplay = "M";
             finalDistance = Math.sqrt(Math.pow(svgX - 150, 2) + Math.pow(svgY - 150, 2));
         } else {
-            // 若落點在 0~300 內，則照常進行同心圓分數解算
             if (targetType === "triple_target") {
                 const subCenters = [60, 150, 240];
                 let closestCenterY = 150; let minD = 999;
@@ -421,12 +503,11 @@ function initPanZoomTarget() {
                         finalScore = zone.score; finalDisplay = zone.display; detected = true; break; 
                     } 
                 }
-                if (!detected) { finalScore = 0; finalDisplay = "M"; } // 超出1分環但仍在畫布內
+                if (!detected) { finalScore = 0; finalDisplay = "M"; } 
                 if (targetType === "50m_compound" && finalScore < 5) { finalScore = 0; finalDisplay = "M"; }
             }
         }
 
-        // 寫入全域資料結構 (防呆限制邊界，不讓點點畫到外面看不見的地方)
         fullRoundData[currentEnd][currentIndex] = { 
             x: Math.max(0, Math.min(300, svgX)), 
             y: Math.max(0, Math.min(300, svgY)), 
@@ -447,6 +528,8 @@ function initPanZoomTarget() {
             upBtn.textContent = "🎉 滿箭！上傳雲端資料庫"; document.getElementById('chkScoreMode').checked = false; 
         }
         updateActiveHighlight();
+        
+        saveToLocalStorage(); // 💾 【新增】每點完一箭，就即時存檔至手機中
     };
 }
 
@@ -508,6 +591,8 @@ function undoLastArrow() {
     const upBtn = document.getElementById('btnUpload'); upBtn.disabled = true; upBtn.style.opacity = "0.4";
     upBtn.textContent = "💾 請先完成總箭數";
     recalculateTotals(); handleLayerAndMetricsChange(); updateActiveHighlight();
+    
+    saveToLocalStorage(); // 💾 【新增】復原上一箭時也更新手機本地快取
 }
 
 function sendAllToSheets() {
@@ -528,7 +613,11 @@ function sendAllToSheets() {
     })
     .then(res => res.json())
     .then(response => {
-        if(response.status === "success") { alert("🎉 資料已成功排入雲端同步序列！"); upBtn.textContent = "💾 傳輸完成"; } 
+        if(response.status === "success") { 
+            alert("🎉 資料已成功排入雲端同步序列！"); 
+            upBtn.textContent = "💾 傳輸完成"; 
+            localStorage.removeItem("beichen_archery_autosave"); // 🧹 【新增】成功入庫後，清除手機暫存防止重複載入
+        } 
         else { alert("❌ 資料庫回傳失敗: " + response.message); upBtn.disabled = false; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫"; }
     })
     .catch(err => {
@@ -537,7 +626,12 @@ function sendAllToSheets() {
     });
 }
 
+// 📂 網頁一打開，立刻自動檢查手機內有無未上傳的舊測驗資料
 window.addEventListener('DOMContentLoaded', () => {
-    handleMatchTypeChange();
-    updateSvgTargetSkin();
+    const hasLoaded = loadFromLocalStorage(); // 👈 先嘗試載入本地紀錄
+    if (!hasLoaded) {
+        // 如果手機內沒有舊紀錄，才走一般初始化流程
+        handleMatchTypeChange();
+        updateSvgTargetSkin();
+    }
 });
