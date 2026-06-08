@@ -26,7 +26,7 @@ const STORM_COLORS = [
     { inner: "rgba(241, 196, 15, 0.45)", outer: "rgba(241, 196, 15, 0.12)" }
 ];
 
-// 💾 【新增】將當前狀態自動儲存到手機 localStorage
+// 💾 將當前狀態自動儲存到手機 localStorage
 function saveToLocalStorage() {
     const sessionState = {
         athleteId: GLOBAL_ATHLETE_ID,
@@ -46,7 +46,7 @@ function saveToLocalStorage() {
     localStorage.setItem("beichen_archery_autosave", JSON.stringify(sessionState));
 }
 
-// 📂 【新增】從手機讀取上一次未完成的測驗資料
+// 📂 從手機讀取上一次未完成的測驗資料
 function loadFromLocalStorage() {
     const savedData = localStorage.getItem("beichen_archery_autosave");
     if (!savedData) return false;
@@ -54,7 +54,6 @@ function loadFromLocalStorage() {
     try {
         const state = JSON.parse(savedData);
         
-        // 還原全域參數
         GLOBAL_ATHLETE_ID = state.athleteId;
         GLOBAL_USER_NAME = state.userName;
         TOTAL_ARROWS_LIMIT = state.totalArrows;
@@ -65,7 +64,6 @@ function loadFromLocalStorage() {
         globalArrowCount = state.globalArrowCount;
         fullRoundData = state.fullRoundData;
 
-        // 還原 UI 輸入框數值
         document.getElementById('cfgAthleteId').value = state.athleteId;
         document.getElementById('cfgUserId').value = state.userName;
         document.getElementById('matchTypeSelect').value = state.matchType;
@@ -75,14 +73,11 @@ function loadFromLocalStorage() {
         document.getElementById('cfgPrepSec').value = state.prepSec;
         document.getElementById('cfgShootSec').value = state.shootSec;
 
-        // 隱藏設定面板並初始化界面
         document.getElementById('setupPanel').style.display = 'none';
         document.getElementById('timerDisplay').textContent = state.prepSec;
         handleMatchTypeChange();
 
-        // 重構表格與歷史落點
         initTable();
-        // 將備份的分數填回畫面表格
         for (let e = 0; e < TOTAL_ROWS; e++) {
             if (!fullRoundData[e]) continue;
             for (let a = 0; a < ARROWS_PER_END; a++) {
@@ -100,7 +95,6 @@ function loadFromLocalStorage() {
         handleLayerAndMetricsChange();
         updateActiveHighlight();
 
-        // 如果載入時就已經滿箭，把上傳按鈕打開
         if (globalArrowCount >= TOTAL_ARROWS_LIMIT) {
             const upBtn = document.getElementById('btnUpload');
             upBtn.disabled = false;
@@ -115,6 +109,48 @@ function loadFromLocalStorage() {
         console.error("讀取本地存檔失敗:", e);
         return false;
     }
+}
+
+// 📥 【新增】讓使用者下載結果紀錄檔案到手機
+function downloadLocalResult() {
+    if (globalArrowCount === 0) {
+        alert("❌ 目前尚無任何射擊數據可以下載！");
+        return;
+    }
+
+    // 打包當前所有數據與統計指標
+    const exportData = {
+        downloadTime: new Date().toLocaleString(),
+        athleteId: GLOBAL_ATHLETE_ID || "未填寫",
+        userName: GLOBAL_USER_NAME || "匿名選手",
+        matchType: document.getElementById('matchTypeSelect').value,
+        targetSize: document.getElementById('targetSizeSelect').value,
+        totalArrowsLimit: TOTAL_ARROWS_LIMIT,
+        arrowsPerEnd: ARROWS_PER_END,
+        totalArrowsShot: globalArrowCount,
+        metrics: {
+            accuracy: document.getElementById('mAccuracy').textContent,
+            precision: document.getElementById('mPrecision').textContent,
+            stability: document.getElementById('mStability').textContent,
+            endAvg: document.getElementById('mEndAvg').textContent
+        },
+        scoresDetails: fullRoundData
+    };
+
+    // 轉成 JSON 檔案格式
+    const jsonString = JSON.stringify(exportData, null, 4);
+    const blob = new Blob([jsonString], { type: "application/json;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    
+    // 建立虛擬超連結觸發下載
+    const link = document.createElement("a");
+    const dateStr = new Date().toISOString().slice(0,10);
+    link.href = url;
+    link.download = `北辰射箭紀錄_${exportData.userName}_${dateStr}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
 function handleMatchTypeChange() {
@@ -178,7 +214,7 @@ function startSession() {
     initPanZoomTarget(); 
     updateSvgTargetSkin();
     
-    saveToLocalStorage(); // 💾 初始開局存檔一次
+    saveToLocalStorage(); 
 }
 
 function initTable() {
@@ -529,7 +565,7 @@ function initPanZoomTarget() {
         }
         updateActiveHighlight();
         
-        saveToLocalStorage(); // 💾 【新增】每點完一箭，就即時存檔至手機中
+        saveToLocalStorage(); 
     };
 }
 
@@ -592,7 +628,7 @@ function undoLastArrow() {
     upBtn.textContent = "💾 請先完成總箭數";
     recalculateTotals(); handleLayerAndMetricsChange(); updateActiveHighlight();
     
-    saveToLocalStorage(); // 💾 【新增】復原上一箭時也更新手機本地快取
+    saveToLocalStorage(); 
 }
 
 function sendAllToSheets() {
@@ -616,7 +652,7 @@ function sendAllToSheets() {
         if(response.status === "success") { 
             alert("🎉 資料已成功排入雲端同步序列！"); 
             upBtn.textContent = "💾 傳輸完成"; 
-            localStorage.removeItem("beichen_archery_autosave"); // 🧹 【新增】成功入庫後，清除手機暫存防止重複載入
+            localStorage.removeItem("beichen_archery_autosave"); 
         } 
         else { alert("❌ 資料庫回傳失敗: " + response.message); upBtn.disabled = false; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫"; }
     })
@@ -626,11 +662,9 @@ function sendAllToSheets() {
     });
 }
 
-// 📂 網頁一打開，立刻自動檢查手機內有無未上傳的舊測驗資料
 window.addEventListener('DOMContentLoaded', () => {
-    const hasLoaded = loadFromLocalStorage(); // 👈 先嘗試載入本地紀錄
+    const hasLoaded = loadFromLocalStorage(); 
     if (!hasLoaded) {
-        // 如果手機內沒有舊紀錄，才走一般初始化流程
         handleMatchTypeChange();
         updateSvgTargetSkin();
     }
