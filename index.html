@@ -378,7 +378,6 @@
         osc.start(startTime); osc.stop(startTime + 0.2);
     }
 
-// --- 修改後的開局與 SVG 畫布比例 ---
     function startSession() {
         ensureAudioContext();
         GLOBAL_ATHLETE_ID = document.getElementById('cfgAthleteId').value;
@@ -395,99 +394,7 @@
         initTable(); 
         initToggleCheckboxes(); 
         initPanZoomTarget(); 
-        updateSvgTargetSkin(); // 記得要重新渲染靶面以匹配新畫布
-    }
-
-    // --- 核心：修改畫布比例與智能點靶邏輯 ---
-    function initPanZoomTarget() {
-        const svg = document.getElementById('archeryTarget');
-        // 【核心修改】：調整 viewBox 橫向比例，為脫靶(M)區留白
-        svg.setAttribute("viewBox", "0 0 440 300");
-        
-        // 確保白色的背景 rect 也能覆蓋到擴大的區域
-        const bgRect = document.getElementById('whiteTargetBackground');
-        if(bgRect) { bgRect.setAttribute("width", "440"); }
-
-        svg.addEventListener('click', function(e) {
-            if (!document.getElementById('chkScoreMode').checked) return;
-            if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
-
-            // 1. 取得點擊相對 SVG 的精確座標 (基於 440x300 的新比例)
-            const pt = svg.createSVGPoint();
-            pt.x = e.clientX; pt.y = e.clientY;
-            const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
-            
-            // 2. 計算得分
-            const result = calculateScoreAndDistance(svgP.x, svgP.y);
-            
-            // 3. 數據入庫與 UI 更新
-            if (currentEnd < TOTAL_ROWS) {
-                // 存入數據，包含座標 (svgP.x, svgP.y) 與 分數
-                fullRoundData[currentEnd].push({ 
-                    score: result.score, 
-                    display: result.display,
-                    x: svgP.x, 
-                    y: svgP.y,
-                    dist: result.distance
-                });
-                
-                updateScoreTable(result.display);
-                drawArrowOnTarget(svgP.x, svgP.y, result.display); // 根據顯示值繪製箭色
-                
-                currentIndex++;
-                globalArrowCount++;
-
-                if (currentIndex >= ARROWS_PER_END) {
-                    // 自動計算並顯示該趟的運科指標
-                    calculateEndSportMetrics(currentEnd);
-                    currentEnd++; currentIndex = 0;
-                }
-                updateActiveHighlight();
-                updateBottomButtonsStatus(); // 檢查是否達總箭數，開放上傳
-            }
-        });
-    }
-
-    function calculateScoreAndDistance(x, y) {
-        const targetType = document.getElementById('targetSizeSelect').value;
-        let centers = [];
-        
-        // --- 核心邏輯分流：單靶(含特規) vs 三環靶 ---
-        if (targetType === "triple_target") {
-            // 三環靶：靶心維持在畫布中心，但有上下三個
-            centers = [{x: 220, y: 60, min: 6}, {x: 220, y: 150, min: 6}, {x: 220, y: 240, min: 6}];
-        } else {
-            // 標準靶：靶心維持在舊 viewBox (300) 的中心，即現在 440 的 (220, 150)
-            // 而橫向 0-70 與 370-440 的純白區則為記 M 區
-            centers = [{x: 220, y: 150, min: 1}];
-        }
-
-        let bestDist = Infinity;
-        let targetCenter = centers[0];
-        centers.forEach(p => {
-            let d = Math.sqrt(Math.pow(x - p.x, 2) + Math.pow(y - p.y, 2));
-            if (d < bestDist) { bestDist = d; targetCenter = p; }
-        });
-
-        // 環寬換算 (基於 300x300 viewBox 的 WA 規格比例)
-        const LINE_BIAS = 0.4;
-        const ringWidth = (targetType === "triple_target") ? 8.4 : 15;
-        
-        let score = 10 - Math.floor(bestDist / ringWidth);
-        let display = score;
-
-        // X環與10分特殊判定 (依據 WA 規格)
-        if (score === 10) {
-            let xRingR = (targetType === "triple_target") ? 4.2 : 7.5;
-            display = (bestDist <= xRingR) ? "X" : "10";
-        }
-
-        // 邊界判定與複合弓保護
-        if (score > 10) score = 10;
-        if (score < targetCenter.min) { score = 0; display = "M"; }
-        if (targetType === "50m_compound" && score < 5) { score = 0; display = "M"; }
-
-        return { score: score, display: display, distance: bestDist };
+        updateSvgTargetSkin();
     }
 
     function initTable() {
