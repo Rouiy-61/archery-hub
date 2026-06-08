@@ -294,7 +294,6 @@
 
     <div class="btn-group" id="bottomBtnGroup">
         <button class="action-btn back-btn" onclick="undoLastArrow()">↩️ 刪除/修改上一箭</button>
-        <button class="action-btn" style="background:#3498db;" onclick="exportDataToJson()">💾 導出數據</button>
         <button class="action-btn submit-btn" id="btnUpload" onclick="sendAllToSheets()" style="opacity:0.4;" disabled>💾 請先完成總箭數</button>
     </div>
 
@@ -481,32 +480,7 @@
         document.getElementById('timerDisplay').textContent = document.getElementById('cfgPrepSec').value;
         document.getElementById('timerStatus').innerHTML = "⏱️ 已重置<br>點擊重新啟動";
     }
-function exportDataToJson() {
-    // 確保有數據可導出
-    if (!fullRoundData || fullRoundData.length === 0) {
-        alert("目前沒有射擊數據！");
-        return;
-    }
 
-    // 準備導出物件
-    const exportData = {
-        athleteId: document.getElementById('cfgAthleteId').value || "Unknown",
-        userName: document.getElementById('cfgUserId').value || "Unknown",
-        date: new Date().toLocaleString(),
-        rounds: fullRoundData
-    };
-
-    // 轉換為 Blob 並觸發下載
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Archery_Data_${exportData.athleteId}_${new Date().toISOString().slice(0, 10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-}
     function toggleTimer() {
         ensureAudioContext();
         const box = document.getElementById('timerContainer'); const disp = document.getElementById('timerDisplay'); const status = document.getElementById('timerStatus');
@@ -733,16 +707,9 @@ function exportDataToJson() {
                     } 
                 }
                 // 複合弓截斷保護（低於5分即為脫靶）
-              if (targetType === "50m_compound" && finalScore < 5) { finalScore = 0; finalDisplay = "M"; }
+                if (targetType === "50m_compound" && finalScore < 5) { finalScore = 0; finalDisplay = "M"; }
+            }
 
-// --- 新增：處理 M 脫靶判定 ---
-if (!detected || finalDistance > 150) {
-    finalScore = 0; 
-    finalDisplay = "M"; 
-}
-
-// 寫入數據並更新 UI (呼叫您原本的計分邏輯函數，例如 recordArrow)
-recordArrow(finalDisplay, svgX, svgY, finalScore);
             // 寫入全域資料結構
             fullRoundData[currentEnd][currentIndex] = { 
                 x: Math.max(0, Math.min(300, svgX)), 
