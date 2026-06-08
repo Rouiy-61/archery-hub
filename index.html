@@ -1,512 +1,677 @@
-const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzg_PFt2oDBDL8Bboegje5nzpL5zdHuzGsBVyKOXKm9TgWSaFovkeeifm9_EZy0l8RaYw/exec"; 
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>北辰射箭計分運科系統 v1.7.0</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --card-bg: #1e1e1e;
+            --gold: #ffd700;
+            --text: #ffffff;
+            --grid-border: #333;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color); color: var(--text);
+            margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center;
+            position: relative;
+        }
+        .container { width: 100%; max-width: 440px; box-sizing: border-box; display: flex; flex-direction: column; }
+        h3 { text-align: center; color: var(--gold); margin: 5px 0; }
 
-const MATCH_CONFIGS = {
-    double_72: { total: 72, perEnd: 6 },
-    single_36: { total: 36, perEnd: 6 },
-    public_18: { total: 18, perEnd: 3 },
-    test_6:    { total: 6,  perEnd: 3 }
-};
+        /* 初始設定面板 */
+        .setup-overlay {
+            background: var(--card-bg); border: 2px solid var(--gold); border-radius: 12px;
+            padding: 15px; margin-bottom: 12px; text-align: center;
+        }
+        .setup-overlay select, .setup-overlay input {
+            background: #2b2b2b; color: white; border: 1px solid #444;
+            padding: 6px; border-radius: 4px; margin: 5px; font-size: 14px;
+        }
 
-let TOTAL_ROWS = 0; 
-let TOTAL_ARROWS_LIMIT = 0;
-let ARROWS_PER_END = 6; 
-const TARGET_CENTER = 150;
-let fullRoundData = [];
-let currentEnd = 0, currentIndex = 0, globalArrowCount = 0;
-let audioCtx = null;
-let GLOBAL_ATHLETE_ID = "";
-let GLOBAL_USER_NAME = "";
+        /* 記分表容器 */
+        .score-table-container {
+            width: 100%; background: var(--card-bg); border-radius: 8px;
+            overflow-y: auto; max-height: 130px; margin-bottom: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+        table { width: 100%; border-collapse: collapse; text-align: center; font-size: 11px; }
+        th, td { border: 1px solid var(--grid-border); padding: 4px 2px; }
+        th { background-color: #2a2a2a; color: #aaa; }
+        .active-cell { background-color: rgba(255, 215, 0, 0.25) !important; border: 2px solid var(--gold) !important; }
+        .end-total { background-color: #2d2d2d; font-weight: bold; color: #2ecc71; }
 
-const STORM_COLORS = [
-    { inner: "rgba(255, 0, 255, 0.4)",  outer: "rgba(255, 0, 255, 0.12)" },
-    { inner: "rgba(0, 255, 255, 0.45)", outer: "rgba(0, 255, 255, 0.12)" },
-    { inner: "rgba(255, 165, 0, 0.45)", outer: "rgba(255, 165, 0, 0.12)" },
-    { inner: "rgba(155, 89, 182, 0.5)", outer: "rgba(155, 89, 182, 0.15)" },
-    { inner: "rgba(46, 204, 113, 0.45)", outer: "rgba(46, 204, 113, 0.12)" },
-    { inner: "rgba(241, 196, 15, 0.45)", outer: "rgba(241, 196, 15, 0.12)" }
-];
+        /* 計時與運科面板 */
+        .tech-grid {
+            display: grid; grid-template-columns: 110px 1fr; gap: 8px; width: 100%; margin-bottom: 10px;
+        }
+        .timer-zone { display: flex; flex-direction: column; gap: 4px; }
+        .timer-box {
+            background: #000; border: 2px solid #333; border-radius: 8px; padding: 6px 0;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; flex-grow: 1;
+        }
+        .timer-box.prep-phase { border-color: #ff3333; box-shadow: inset 0 0 10px rgba(255,51,51,0.5); }
+        .timer-box.shoot-phase { border-color: #2ecc71; box-shadow: inset 0 0 10px rgba(46,204,113,0.5); }
+        .timer-digital { font-size: 26px; font-weight: bold; color: #2ecc71; font-family: monospace; }
+        .timer-status { font-size: 9px; color: #aaa; text-align: center; line-height: 1.2; }
+        .reset-btn {
+            background: #e74c3c; color: white; border: none; border-radius: 4px; padding: 5px 0;
+            font-size: 11px; font-weight: bold; cursor: pointer; width: 100%; text-align: center;
+        }
 
-// 💾 將當前狀態自動儲存到手機 localStorage
-function saveToLocalStorage() {
-    const sessionState = {
-        athleteId: GLOBAL_ATHLETE_ID,
-        userName: GLOBAL_USER_NAME,
-        matchType: document.getElementById('matchTypeSelect').value,
-        targetSize: document.getElementById('targetSizeSelect').value,
-        totalArrows: TOTAL_ARROWS_LIMIT,
-        arrowsPerEnd: ARROWS_PER_END,
-        totalRows: TOTAL_ROWS,
-        currentEnd: currentEnd,
-        currentIndex: currentIndex,
-        globalArrowCount: globalArrowCount,
-        fullRoundData: fullRoundData,
-        prepSec: document.getElementById('cfgPrepSec').value,
-        shootSec: document.getElementById('cfgShootSec').value
-    };
-    localStorage.setItem("beichen_archery_autosave", JSON.stringify(sessionState));
-}
+        /* 運科指標 */
+        .metrics-box {
+            background: #151f28; border-radius: 8px; padding: 6px 8px;
+            display: flex; flex-direction: column; justify-content: space-around; font-size: 11px; cursor: pointer;
+        }
+        .metrics-box:hover { background: #1c2a36; }
+        .metric-line { margin: 1px 0; }
+        .metric-line span { color: var(--gold); font-weight: bold; float: right; }
 
-// 📂 從手機讀取上一次未完成的測驗資料
-function loadFromLocalStorage() {
-    const savedData = localStorage.getItem("beichen_archery_autosave");
-    if (!savedData) return false;
-
-    try {
-        const state = JSON.parse(savedData);
+        /* 說明面板 */
+        .desc-panel {
+            display: none; width: 100%; background: #22313f; border-left: 4px solid #3498db;
+            padding: 8px; border-radius: 4px; font-size: 11px; color: #eceff1; margin-bottom: 10px; box-sizing: border-box;
+        }
         
-        GLOBAL_ATHLETE_ID = state.athleteId;
-        GLOBAL_USER_NAME = state.userName;
-        TOTAL_ARROWS_LIMIT = state.totalArrows;
-        ARROWS_PER_END = state.arrowsPerEnd;
-        TOTAL_ROWS = state.totalRows;
-        currentEnd = state.currentEnd;
-        currentIndex = state.currentIndex;
-        globalArrowCount = state.globalArrowCount;
-        fullRoundData = state.fullRoundData;
-
-        document.getElementById('cfgAthleteId').value = state.athleteId;
-        document.getElementById('cfgUserId').value = state.userName;
-        document.getElementById('matchTypeSelect').value = state.matchType;
-        document.getElementById('targetSizeSelect').value = state.targetSize;
-        document.getElementById('totalArrowsInput').value = state.totalArrows;
-        document.getElementById('arrowsPerEndInput').value = state.arrowsPerEnd;
-        document.getElementById('cfgPrepSec').value = state.prepSec;
-        document.getElementById('cfgShootSec').value = state.shootSec;
-
-        document.getElementById('setupPanel').style.display = 'none';
-        document.getElementById('timerDisplay').textContent = state.prepSec;
-        handleMatchTypeChange();
-
-        initTable();
-        for (let e = 0; e < TOTAL_ROWS; e++) {
-            if (!fullRoundData[e]) continue;
-            for (let a = 0; a < ARROWS_PER_END; a++) {
-                const arrow = fullRoundData[e][a];
-                if (arrow) {
-                    document.getElementById(`cell-${e}-${a}`).textContent = arrow.display;
-                }
-            }
+        /* 雙主視窗工作區 */
+        .main-display-zone {
+            width: 100%; background: var(--card-bg); border-radius: 12px; padding: 10px;
+            box-sizing: border-box; display: flex; flex-direction: column; align-items: center;
+            position: relative; min-height: 360px;
+        }
+        
+        /* 1. 靶紙外圍視窗容器 */
+        #targetWrapper {
+            width: 100%; display: flex; flex-direction: column; align-items: center; position: relative;
+        }
+        .svg-holder {
+            width: 100%; max-width: 290px; height: 290px; position: relative; overflow: hidden; 
+            background: #1a1a1a; border-radius: 8px; touch-action: none;
+        }
+        svg { 
+            width: 100%; height: 100%; 
+            transform-origin: 0px 0px;
+            transition: transform 0.05s ease-out;
         }
 
-        initToggleCheckboxes();
-        initPanZoomTarget();
-        updateSvgTargetSkin();
-        recalculateTotals();
-        handleLayerAndMetricsChange();
-        updateActiveHighlight();
-
-        if (globalArrowCount >= TOTAL_ARROWS_LIMIT) {
-            const upBtn = document.getElementById('btnUpload');
-            upBtn.disabled = false;
-            upBtn.style.opacity = "1";
-            upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
-            document.getElementById('chkScoreMode').checked = false;
+        /* 2. 錄影回放視窗容器 */
+        #videoWrapper {
+            width: 100%; display: none; flex-direction: column;
+            align-items: center; justify-content: flex-start; position: relative; gap: 8px;
+            padding: 0; margin: 0;
         }
 
-        alert(`📂 已自動恢復上一次「${GLOBAL_USER_NAME}」未完成的測驗紀錄！`);
-        return true;
-    } catch (e) {
-        console.error("讀取本地存檔失敗:", e);
-        return false;
-    }
-}
+        .video-top-control {
+            display: grid;
+            grid-template-columns: 1fr 110px;
+            gap: 8px;
+            width: 100%;
+            align-items: stretch;
+        }
 
-// 📥 【新增】讓使用者下載結果紀錄檔案到手機
-function downloadLocalResult() {
-    if (globalArrowCount === 0) {
-        alert("❌ 目前尚無任何射擊數據可以下載！");
-        return;
-    }
+        #camCanvas {
+            width: 100%; height: auto; max-height: 320px; background: #000;
+            border-radius: 8px; border: 2px solid #444; transform: scaleX(-1);
+            box-sizing: border-box; object-fit: contain;
+        }
 
-    // 打包當前所有數據與統計指標
-    const exportData = {
-        downloadTime: new Date().toLocaleString(),
-        athleteId: GLOBAL_ATHLETE_ID || "未填寫",
-        userName: GLOBAL_USER_NAME || "匿名選手",
-        matchType: document.getElementById('matchTypeSelect').value,
-        targetSize: document.getElementById('targetSizeSelect').value,
-        totalArrowsLimit: TOTAL_ARROWS_LIMIT,
-        arrowsPerEnd: ARROWS_PER_END,
-        totalArrowsShot: globalArrowCount,
-        metrics: {
-            accuracy: document.getElementById('mAccuracy').textContent,
-            precision: document.getElementById('mPrecision').textContent,
-            stability: document.getElementById('mStability').textContent,
-            endAvg: document.getElementById('mEndAvg').textContent
-        },
-        scoresDetails: fullRoundData
+        .cam-status-lbl {
+            font-size: 12px; color: #ff3333; display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 2px;
+        }
+
+        .btn-return-target {
+            width: 100%; background: linear-gradient(135deg, #2ecc71, #27ae60); color: white;
+            border: none; border-radius: 6px; padding: 0 10px; font-size: 15px; font-weight: bold;
+            cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        /* 控制開關與切換列 */
+        .control-mode-bar {
+            width: 100%; background: #252a30; padding: 10px 6px; border-radius: 8px;
+            margin-top: 10px; font-size: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+            border: 1px solid #3a4454; box-sizing: border-box;
+        }
+        .btn-toggle-ctl {
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+            background: #1e1e1e; padding: 8px 4px; border-radius: 5px; border: 1px solid #555;
+            font-weight: bold; cursor: pointer; color: #fff; text-align: center;
+        }
+        .btn-toggle-ctl input { width: 14px; height: 14px; margin: 0; cursor: pointer; }
+        
+        .btn-view-switch {
+            grid-column: span 2; background: linear-gradient(135deg, #3498db, #2980b9); color: white;
+            padding: 10px; font-size: 12px; font-weight: bold; border-radius: 5px; border: none;
+            cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 4px;
+        }
+
+        /* 趟數圖層過濾開關 */
+        .toggle-layer-box {
+            width: 100%; margin-top: 8px; padding: 6px; background: #252525; border-radius: 6px;
+            font-size: 11px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; box-sizing: border-box;
+        }
+        .toggle-layer-box label { display: flex; align-items: center; gap: 3px; cursor: pointer; }
+
+        /* 底欄控制 */
+        .btn-group { display: flex; gap: 8px; margin-top: 10px; width: 100%; }
+        button.action-btn { flex: 1; padding: 12px; font-size: 14px; font-weight: bold; border-radius: 6px; border: none; cursor: pointer; }
+        .submit-btn { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; }
+        .back-btn { background: #333; color: white; }
+
+        .system-footer {
+            margin-top: 15px; margin-bottom: 5px; width: 100%; text-align: center;
+            font-size: 9px; color: #555; font-family: monospace;
+            border-top: 1px dashed #2d2d2d; padding-top: 8px;
+        }
+
+        /* 錄影模式絕對隱藏 */
+        body.view-video-mode h3,
+        body.view-video-mode .score-table-container,
+        body.view-video-mode .metrics-box,
+        body.view-video-mode .desc-panel,
+        body.view-video-mode .toggle-layer-box,
+        body.view-video-mode .btn-group,
+        body.view-video-mode .system-footer {
+            display: none !important;
+        }
+        body.view-video-mode .tech-grid { display: block !important; margin-bottom: 5px; }
+        body.view-video-mode .timer-zone .reset-btn { display: none !important; }
+        body.view-video-mode .main-display-zone { background: transparent; padding: 0; border-radius: 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h3>北辰射箭計分系統</h3>
+    
+    <div id="setupPanel" class="setup-overlay">
+        <label style="font-weight: bold; color: var(--gold);">🛠️ 本局測驗與計時規格設定</label><br>
+        <div style="margin-top: 8px; text-align: left; display: inline-block; width: 100%;">
+            選手 ID：<input type="text" id="cfgAthleteId" value="BC-001" style="width: 80px;"><br>
+            選手姓名：<input type="text" id="cfgUserId" value="未輸入" style="width: 80px;"><br>
+            
+            選擇賽制：
+            <select id="matchTypeSelect" onchange="handleMatchTypeChange()" style="width: 140px;">
+                <option value="custom">⚙️ 自定義賽制</option>
+                <option value="double_72" selected>🏆 雙局排名賽 (72箭)</option>
+                <option value="single_36">🥇 單局排名賽 (36箭)</option>
+                <option value="public_18">👥 公開組賽制 (18箭)</option>
+                <option value="test_6">🧪 系統測試模式 (6箭)</option>
+            </select><br>
+
+            <div id="customArrowsArea" style="display: none; padding-left: 10px; margin: 4px 0;">
+                ↳ 總箭數：<input type="number" id="totalArrowsInput" value="72" min="1" style="width: 50px;"> 
+                每趟：<input type="number" id="arrowsPerEndInput" value="6" min="1" max="6" style="width: 40px;"> 箭<br>
+            </div>
+
+            預備時間：<input type="number" id="cfgPrepSec" value="10" style="width: 40px;"> 秒<br>
+            射擊時間：<input type="number" id="cfgShootSec" value="90" style="width: 40px;"> 秒<br>
+            
+            靶紙規格：
+            <select id="targetSizeSelect" onchange="updateSvgTargetSkin()" style="width: 220px; margin-top: 5px;">
+                <option value="70m_90m">🎯 70m / 90m (122cm 全靶 1-10分)</option>
+                <option value="60m">🎯 60m (122cm 全靶 1-10分)</option>
+                <option value="50m_compound">🎯 50m 複合弓 (80cm 六環靶 5-10分)</option>
+                <option value="30m_recurve">🎯 30m 反曲弓 (80cm 全靶 1-10分)</option>
+                <option value="18m_indoor">🎯 18m 室內賽 (40cm 全靶 1-10分)</option>
+                <option value="triple_target">🎯 18m 三環靶 (垂直三連體 6-10分)</option>
+            </select>
+        </div>
+        <button onclick="startSession()" id="btnStartGame" style="margin-top:12px; padding:10px; width:90%; font-size:15px; font-weight:bold; background: linear-gradient(135deg, #e67e22, #d35400); color:white; border:none; border-radius:6px; cursor:pointer;">🎯 開局！</button>
+    </div>
+
+    <div class="score-table-container">
+        <table>
+            <thead>
+                <tr id="scoreTableHeaderRow">
+                    </tr>
+            </thead>
+            <tbody id="scoreTableBody"></tbody>
+        </table>
+    </div>
+
+    <div class="tech-grid" id="techGrid">
+        <div class="timer-zone" id="dynamicTimerZone">
+            <div id="timerContainer" class="timer-box" onclick="toggleTimer()">
+                <div id="timerDisplay" class="timer-digital">10</div>
+                <div id="timerStatus" class="timer-status">⏱️ 點擊啟動</div>
+            </div>
+            <button class="reset-btn" onclick="resetTimer()">🔄 重設計時</button>
+        </div>
+        
+        <div class="metrics-box" onclick="toggleDescPanel()">
+            <div class="metric-line">🎯 當組偏移: <span id="mAccuracy">--</span></div>
+            <div class="metric-line">🧬 集中直徑: <span id="mPrecision">--</span></div>
+            <div class="metric-line">⚡ 穩定起伏: <span id="mStability">--</span></div>
+            <div class="metric-line">📊 每趟均值: <span id="mEndAvg">--</span></div>
+        </div>
+    </div>
+
+    <div id="descPanel" class="desc-panel">
+        <strong>📊 射箭運動科學指標說明：</strong><br>
+        • <strong>當組偏移 (Accuracy)：</strong>箭著點與絕對靶心的平均距離。數值越低，瞄具越準。<br>
+        • <strong>集中直徑 (Precision)：</strong>核心密集度。數值越小，代表技術動作重複性極高。<br>
+        • <strong>穩定起伏 (Stability)：</strong>分數標準差。量化射手該趟技術與心理耐受度。<br>
+        • <strong>每趟均值 (End Avg)：</strong>當前勾選趟數的平均單箭得分。
+    </div>
+
+    <div class="main-display-zone">
+        
+        <div id="targetWrapper">
+            <div class="svg-holder" id="svgHolder">
+                <svg id="archeryTarget" viewBox="0 0 300 300">
+                    <rect x="0" y="0" width="300" height="300" fill="#ffffff" id="whiteTargetBackground"/>
+                    <g id="targetDynamicRingsGroup"></g> <g id="clusterLayerGroup"></g>       <g id="arrowGroup"></g>              </svg>
+            </div>
+            
+            <div class="control-mode-bar">
+                <label class="btn-toggle-ctl" style="color: #2ecc71; border-color: #2ecc71;">
+                    <input type="checkbox" id="chkScoreMode"> 📌 開啟點靶記分
+                </label>
+                <label class="btn-toggle-ctl" style="color: #e67e22; border-color: #e67e22;">
+                    <input type="checkbox" id="chkCamActive" onchange="toggleCameraHardware()"> 📷 開啟錄影鏡頭
+                </label>
+                <button class="btn-view-switch" onclick="switchMainView()">
+                    🔄 切換顯示畫面：<span id="currentViewName" style="color:var(--gold);">📷 開啟錄影畫面</span>
+                </button>
+            </div>
+        </div>
+
+        <div id="videoWrapper">
+            <div class="video-top-control">
+                <button class="btn-return-target" onclick="forceReturnToTarget()">🎯 返回計分靶紙</button>
+                <div id="videoTimerPlaceholder"></div>
+            </div>
+            <canvas id="camCanvas"></canvas>
+            <div id="camStatusLabel" class="cam-status-lbl">📷 鏡頭未啟動</div>
+        </div>
+
+        <div class="toggle-layer-box" id="layerToggleBox"></div>
+    </div>
+
+    <div class="btn-group" id="bottomBtnGroup">
+        <button class="action-btn back-btn" onclick="undoLastArrow()">↩️ 刪除/修改上一箭</button>
+        <button class="action-btn submit-btn" id="btnUpload" onclick="sendAllToSheets()" style="opacity:0.4;" disabled>💾 請先完成總箭數</button>
+    </div>
+
+    <div class="system-footer" id="mainFooter">
+        NORTH STAR ARCHERY LAB SYSTEM © 2026<br>
+        DESIGNED BY ROY | VERSION 1.7.0 國際靶規格定義版
+    </div>
+</div>
+
+<video id="hiddenVideo" autoplay muted playsinline style="display:none;"></video>
+
+<script>
+    const GAS_API_URL = "https://script.google.com/macros/s/AKfycbzg_PFt2oDBDL8Bboegje5nzpL5zdHuzGsBVyKOXKm9TgWSaFovkeeifm9_EZy0l8RaYw/exec"; 
+
+    // 國際賽規格連動定義
+    const MATCH_CONFIGS = {
+        double_72: { total: 72, perEnd: 6 },
+        single_36: { total: 36, perEnd: 6 },
+        public_18: { total: 18, perEnd: 3 },
+        test_6:    { total: 6,  perEnd: 3 }
     };
 
-    // 轉成 JSON 檔案格式
-    const jsonString = JSON.stringify(exportData, null, 4);
-    const blob = new Blob([jsonString], { type: "application/json;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    
-    // 建立虛擬超連結觸發下載
-    const link = document.createElement("a");
-    const dateStr = new Date().toISOString().slice(0,10);
-    link.href = url;
-    link.download = `北辰射箭紀錄_${exportData.userName}_${dateStr}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-}
+    let TOTAL_ROWS = 0; 
+    let TOTAL_ARROWS_LIMIT = 0;
+    let ARROWS_PER_END = 6; // 每趟箭數（動態 3 或 6 箭）
+    const TARGET_CENTER = 150;
+    let fullRoundData = [];
+    let currentEnd = 0, currentIndex = 0, globalArrowCount = 0;
+    let audioCtx = null;
+    let GLOBAL_ATHLETE_ID = "";
+    let GLOBAL_USER_NAME = "";
 
-function handleMatchTypeChange() {
-    const type = document.getElementById('matchTypeSelect').value;
-    const customArea = document.getElementById('customArrowsArea');
-    if (type === 'custom') {
-        customArea.style.display = 'block';
-    } else {
-        customArea.style.display = 'none';
-        document.getElementById('totalArrowsInput').value = MATCH_CONFIGS[type].total;
-        document.getElementById('arrowsPerEndInput').value = MATCH_CONFIGS[type].perEnd;
+    const STORM_COLORS = [
+        { inner: "rgba(255, 0, 255, 0.4)",  outer: "rgba(255, 0, 255, 0.12)" },
+        { inner: "rgba(0, 255, 255, 0.45)", outer: "rgba(0, 255, 255, 0.12)" },
+        { inner: "rgba(255, 165, 0, 0.45)", outer: "rgba(255, 165, 0, 0.12)" },
+        { inner: "rgba(155, 89, 182, 0.5)", outer: "rgba(155, 89, 182, 0.15)" },
+        { inner: "rgba(46, 204, 113, 0.45)", outer: "rgba(46, 204, 113, 0.12)" },
+        { inner: "rgba(241, 196, 15, 0.45)", outer: "rgba(241, 196, 15, 0.12)" }
+    ];
+
+    function handleMatchTypeChange() {
+        const type = document.getElementById('matchTypeSelect').value;
+        const customArea = document.getElementById('customArrowsArea');
+        if (type === 'custom') {
+            customArea.style.display = 'block';
+        } else {
+            customArea.style.display = 'none';
+            document.getElementById('totalArrowsInput').value = MATCH_CONFIGS[type].total;
+            document.getElementById('arrowsPerEndInput').value = MATCH_CONFIGS[type].perEnd;
+        }
     }
-}
 
-function ensureAudioContext() {
-    if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-    if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); }
-}
+    function ensureAudioContext() {
+        if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); }
+    }
 
-function playBeep(type) {
-    try {
+    function playBeep(type) {
+        try {
+            ensureAudioContext();
+            const now = audioCtx.currentTime;
+            if (type === 'prep_2short') {
+                triggerShortTone(now); triggerShortTone(now + 0.25);
+            } else if (type === 'shoot_1short') {
+                triggerShortTone(now);
+            } else if (type === 'timeup_1long') {
+                let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+                osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now); gain.gain.setValueAtTime(0.8, now);
+                gain.gain.setValueAtTime(0.8, now + 1.2); gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+                osc.start(now); osc.stop(now + 1.5);
+            }
+        } catch(e) { console.log("Audio Error:", e); }
+    }
+
+    function triggerShortTone(startTime) {
+        let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, startTime); gain.gain.setValueAtTime(0.8, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18);
+        osc.start(startTime); osc.stop(startTime + 0.2);
+    }
+
+    function startSession() {
         ensureAudioContext();
-        const now = audioCtx.currentTime;
-        if (type === 'prep_2short') {
-            triggerShortTone(now); triggerShortTone(now + 0.25);
-        } else if (type === 'shoot_1short') {
-            triggerShortTone(now);
-        } else if (type === 'timeup_1long') {
-            let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
-            osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'sine';
-            osc.frequency.setValueAtTime(800, now); gain.gain.setValueAtTime(0.8, now);
-            gain.gain.setValueAtTime(0.8, now + 1.2); gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
-            osc.start(now); osc.stop(now + 1.5);
+        GLOBAL_ATHLETE_ID = document.getElementById('cfgAthleteId').value;
+        GLOBAL_USER_NAME = document.getElementById('cfgUserId').value;
+        
+        TOTAL_ARROWS_LIMIT = parseInt(document.getElementById('totalArrowsInput').value);
+        ARROWS_PER_END = parseInt(document.getElementById('arrowsPerEndInput').value);
+        TOTAL_ROWS = Math.ceil(TOTAL_ARROWS_LIMIT / ARROWS_PER_END);
+        
+        fullRoundData = Array.from({ length: TOTAL_ROWS }, () => []);
+        document.getElementById('timerDisplay').textContent = document.getElementById('cfgPrepSec').value;
+        document.getElementById('setupPanel').style.display = 'none';
+        
+        initTable(); 
+        initToggleCheckboxes(); 
+        initPanZoomTarget(); 
+        updateSvgTargetSkin();
+    }
+
+    function initTable() {
+        const headerRow = document.getElementById('scoreTableHeaderRow');
+        let headerHtml = `<th>趟</th>`;
+        for (let a = 0; a < ARROWS_PER_END; a++) {
+            const zhNum = ['一', '二', '三', '四', '五', '六'][a] || (a + 1);
+            headerHtml += `<th>${zhNum}</th>`;
         }
-    } catch(e) { console.log("Audio Error:", e); }
-}
+        headerHtml += `<th>本趟</th><th>累計</th>`;
+        headerRow.innerHTML = headerHtml;
 
-function triggerShortTone(startTime) {
-    let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'sine';
-    osc.frequency.setValueAtTime(800, startTime); gain.gain.setValueAtTime(0.8, startTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18);
-    osc.start(startTime); osc.stop(startTime + 0.2);
-}
-
-function startSession() {
-    ensureAudioContext();
-    GLOBAL_ATHLETE_ID = document.getElementById('cfgAthleteId').value;
-    GLOBAL_USER_NAME = document.getElementById('cfgUserId').value;
-    
-    TOTAL_ARROWS_LIMIT = parseInt(document.getElementById('totalArrowsInput').value);
-    ARROWS_PER_END = parseInt(document.getElementById('arrowsPerEndInput').value);
-    TOTAL_ROWS = Math.ceil(TOTAL_ARROWS_LIMIT / ARROWS_PER_END);
-    
-    fullRoundData = Array.from({ length: TOTAL_ROWS }, () => []);
-    document.getElementById('timerDisplay').textContent = document.getElementById('cfgPrepSec').value;
-    document.getElementById('setupPanel').style.display = 'none';
-    
-    initTable(); 
-    initToggleCheckboxes(); 
-    initPanZoomTarget(); 
-    updateSvgTargetSkin();
-    
-    saveToLocalStorage(); 
-}
-
-function initTable() {
-    const headerRow = document.getElementById('scoreTableHeaderRow');
-    let headerHtml = `<th>趟</th>`;
-    for (let a = 0; a < ARROWS_PER_END; a++) {
-        const zhNum = ['一', '二', '三', '四', '五', '六'][a] || (a + 1);
-        headerHtml += `<th>${zhNum}</th>`;
-    }
-    headerHtml += `<th>本趟</th><th>累計</th>`;
-    headerRow.innerHTML = headerHtml;
-
-    const tableBody = document.getElementById('scoreTableBody'); 
-    tableBody.innerHTML = "";
-    for (let e = 0; e < TOTAL_ROWS; e++) {
-        let tr = document.createElement('tr');
-        tr.innerHTML = `<td style="background:#252525; font-weight:bold; color:#888;">${e + 1}</td>`;
-        for (let a = 0; a < ARROWS_PER_END; a++) { 
-            tr.innerHTML += `<td id="cell-${e}-${a}" style="font-weight:bold;">-</td>`; 
+        const tableBody = document.getElementById('scoreTableBody'); 
+        tableBody.innerHTML = "";
+        for (let e = 0; e < TOTAL_ROWS; e++) {
+            let tr = document.createElement('tr');
+            tr.innerHTML = `<td style="background:#252525; font-weight:bold; color:#888;">${e + 1}</td>`;
+            for (let a = 0; a < ARROWS_PER_END; a++) { 
+                tr.innerHTML += `<td id="cell-${e}-${a}" style="font-weight:bold;">-</td>`; 
+            }
+            tr.innerHTML += `<td class="end-total" id="endTotal-${e}">0</td>`;
+            tr.innerHTML += `<td style="color:var(--gold); font-weight:bold;" id="runTotal-${e}">0</td>`;
+            tableBody.appendChild(tr);
         }
-        tr.innerHTML += `<td class="end-total" id="endTotal-${e}">0</td>`;
-        tr.innerHTML += `<td style="color:var(--gold); font-weight:bold;" id="runTotal-${e}">0</td>`;
-        tableBody.appendChild(tr);
+        updateActiveHighlight();
     }
-    updateActiveHighlight();
-}
 
-function initToggleCheckboxes() {
-    const box = document.getElementById('layerToggleBox'); box.innerHTML = "";
-    for(let e=0; e<TOTAL_ROWS; e++) {
-        let lbl = document.createElement('label');
-        lbl.innerHTML = `<input type="checkbox" id="chk-end-${e}" checked onchange="handleLayerAndMetricsChange()"> <span>第${e+1}趟</span>`;
-        box.appendChild(lbl);
+    function initToggleCheckboxes() {
+        const box = document.getElementById('layerToggleBox'); box.innerHTML = "";
+        for(let e=0; e<TOTAL_ROWS; e++) {
+            let lbl = document.createElement('label');
+            lbl.innerHTML = `<input type="checkbox" id="chk-end-${e}" checked onchange="handleLayerAndMetricsChange()"> <span>第${e+1}趟</span>`;
+            box.appendChild(lbl);
+        }
     }
-}
 
-function updateActiveHighlight() {
-    document.querySelectorAll('.active-cell').forEach(c => c.classList.remove('active-cell'));
-    if (currentEnd < TOTAL_ROWS && currentIndex < ARROWS_PER_END) {
-        const currentCell = document.getElementById(`cell-${currentEnd}-${currentIndex}`);
-        if (currentCell) currentCell.classList.add('active-cell');
+    function updateActiveHighlight() {
+        document.querySelectorAll('.active-cell').forEach(c => c.classList.remove('active-cell'));
+        if (currentEnd < TOTAL_ROWS && currentIndex < ARROWS_PER_END) {
+            const currentCell = document.getElementById(`cell-${currentEnd}-${currentIndex}`);
+            if (currentCell) currentCell.classList.add('active-cell');
+        }
     }
-}
 
-function toggleDescPanel() {
-    const panel = document.getElementById('descPanel');
-    panel.style.display = (panel.style.display === "block") ? "none" : "block";
-}
+    function toggleDescPanel() {
+        const panel = document.getElementById('descPanel');
+        panel.style.display = (panel.style.display === "block") ? "none" : "block";
+    }
 
-function switchMainView() {
-    ensureAudioContext();
-    const tWrap = document.getElementById('targetWrapper'); const vWrap = document.getElementById('videoWrapper'); const vName = document.getElementById('currentViewName');
-    const timerZone = document.getElementById('dynamicTimerZone');
-    if (tWrap.style.display !== "none") {
-        tWrap.style.display = "none"; vWrap.style.display = "flex"; vName.textContent = "🎯 智能靶紙視窗";
-        document.getElementById('videoTimerPlaceholder').appendChild(timerZone);
-        document.body.classList.add('view-video-mode');
-    } else {
+    function switchMainView() {
+        ensureAudioContext();
+        const tWrap = document.getElementById('targetWrapper'); const vWrap = document.getElementById('videoWrapper'); const vName = document.getElementById('currentViewName');
+        const timerZone = document.getElementById('dynamicTimerZone');
+        if (tWrap.style.display !== "none") {
+            tWrap.style.display = "none"; vWrap.style.display = "flex"; vName.textContent = "🎯 智能靶紙視窗";
+            document.getElementById('videoTimerPlaceholder').appendChild(timerZone);
+            document.body.classList.add('view-video-mode');
+        } else {
+            vWrap.style.display = "none"; tWrap.style.display = "flex"; vName.textContent = "📷 開啟錄影畫面";
+            document.getElementById('techGrid').insertBefore(timerZone, document.getElementById('techGrid').firstChild);
+            document.body.classList.remove('view-video-mode');
+        }
+    }
+
+    function forceReturnToTarget() {
+        ensureAudioContext();
+        const tWrap = document.getElementById('targetWrapper'); const vWrap = document.getElementById('videoWrapper'); const vName = document.getElementById('currentViewName');
+        const timerZone = document.getElementById('dynamicTimerZone');
         vWrap.style.display = "none"; tWrap.style.display = "flex"; vName.textContent = "📷 開啟錄影畫面";
         document.getElementById('techGrid').insertBefore(timerZone, document.getElementById('techGrid').firstChild);
         document.body.classList.remove('view-video-mode');
     }
-}
 
-function forceReturnToTarget() {
-    ensureAudioContext();
-    const tWrap = document.getElementById('targetWrapper'); const vWrap = document.getElementById('videoWrapper'); const vName = document.getElementById('currentViewName');
-    const timerZone = document.getElementById('dynamicTimerZone');
-    vWrap.style.display = "none"; tWrap.style.display = "flex"; vName.textContent = "📷 開啟錄影畫面";
-    document.getElementById('techGrid').insertBefore(timerZone, document.getElementById('techGrid').firstChild);
-    document.body.classList.remove('view-video-mode');
-}
-
-let timerInterval = null; let timerState = "IDLE"; let currentSeconds = 0;
-function resetTimer() {
-    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-    timerState = "IDLE"; 
-    currentSeconds = 0; 
-    ensureAudioContext();
-    const box = document.getElementById('timerContainer'); box.className = "timer-box";
-    document.getElementById('timerDisplay').style.color = "#2ecc71";
-    document.getElementById('timerDisplay').textContent = document.getElementById('cfgPrepSec').value;
-    document.getElementById('timerStatus').innerHTML = "⏱️ 已重置<br>點擊重新啟動";
-}
-
-function toggleTimer() {
-    ensureAudioContext();
-    const box = document.getElementById('timerContainer'); const disp = document.getElementById('timerDisplay'); const status = document.getElementById('timerStatus');
-    if (timerState === "PREP" || timerState === "SHOOT") {
-        clearInterval(timerInterval); timerState = "IDLE"; box.className = "timer-box"; status.innerHTML = "⏸️ 已暫停<br>點擊續傳";
-    } else {
-        if (currentSeconds <= 0) {
-            timerState = "PREP"; currentSeconds = parseInt(document.getElementById('cfgPrepSec').value);
-            box.className = "timer-box prep-phase"; disp.style.color = "#ff3333"; status.innerHTML = "🔴 預備中<br>請勿起弓"; 
-            playBeep('prep_2short');
-        } else { timerState = (box.classList.contains("shoot-phase")) ? "SHOOT" : "PREP"; }
-
-        timerInterval = setInterval(() => {
-            ensureAudioContext(); currentSeconds--; disp.textContent = currentSeconds;
-            if (timerState === "SHOOT" && currentSeconds <= 10 && currentSeconds > 0) { triggerShortTone(audioCtx.currentTime); }
-            if (timerState === "PREP" && currentSeconds <= 0) {
-                timerState = "SHOOT"; currentSeconds = parseInt(document.getElementById('cfgShootSec').value);
-                box.className = "timer-box shoot-phase"; disp.style.color = "#2ecc71"; status.innerHTML = "🏹 射擊中<br>計時獨立"; disp.textContent = currentSeconds;
-                playBeep('shoot_1short');
-            } else if (timerState === "SHOOT" && currentSeconds <= 0) {
-                clearInterval(timerInterval); timerState = "IDLE"; box.className = "timer-box"; disp.style.color = "#ff3333"; status.innerHTML = "🛑 時間到"; 
-                playBeep('timeup_1long');
-            }
-        }, 1000);
+    // 🚀 [免刷新完美重置計時器核心]
+    let timerInterval = null; let timerState = "IDLE"; let currentSeconds = 0;
+    function resetTimer() {
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        timerState = "IDLE"; 
+        currentSeconds = 0; 
+        ensureAudioContext();
+        const box = document.getElementById('timerContainer'); box.className = "timer-box";
+        document.getElementById('timerDisplay').style.color = "#2ecc71";
+        document.getElementById('timerDisplay').textContent = document.getElementById('cfgPrepSec').value;
+        document.getElementById('timerStatus').innerHTML = "⏱️ 已重置<br>點擊重新啟動";
     }
-}
 
-let videoStream = null; let camAnimationId = null;
-const MAX_DELAY_SEC = 25; const FPS = 20; 
-const TOTAL_BUFF_FRAMES = MAX_DELAY_SEC * FPS;
-let canvasRingBuffer = []; let ringWriteIdx = 0; let isBufferFull = false;
+    function toggleTimer() {
+        ensureAudioContext();
+        const box = document.getElementById('timerContainer'); const disp = document.getElementById('timerDisplay'); const status = document.getElementById('timerStatus');
+        if (timerState === "PREP" || timerState === "SHOOT") {
+            clearInterval(timerInterval); timerState = "IDLE"; box.className = "timer-box"; status.innerHTML = "⏸️ 已暫停<br>點擊續傳";
+        } else {
+            if (currentSeconds <= 0) {
+                timerState = "PREP"; currentSeconds = parseInt(document.getElementById('cfgPrepSec').value);
+                box.className = "timer-box prep-phase"; disp.style.color = "#ff3333"; status.innerHTML = "🔴 預備中<br>請勿起弓"; 
+                playBeep('prep_2short');
+            } else { timerState = (box.classList.contains("shoot-phase")) ? "SHOOT" : "PREP"; }
 
-function toggleCameraHardware() {
-    const isChecked = document.getElementById('chkCamActive').checked;
-    const lbl = document.getElementById('camStatusLabel'); const canvas = document.getElementById('camCanvas'); const ctx = canvas.getContext('2d');
-    const videoEl = document.getElementById('hiddenVideo');
-    
-    if (isChecked) {
-        lbl.innerHTML = "⏳ 正在啟動相機模組...";
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
-        .then(stream => {
-            videoStream = stream; videoEl.srcObject = stream;
-            videoEl.onloadedmetadata = function() {
-                const vW = videoEl.videoWidth || 640; const vH = videoEl.videoHeight || 480;
-                canvas.width = vW; canvas.height = vH;
-                clearRingBuffer();
-                for(let i=0; i<TOTAL_BUFF_FRAMES; i++) {
-                    let offCanvas = document.createElement('canvas'); offCanvas.width = vW; offCanvas.height = vH;
-                    canvasRingBuffer.push({ cvs: offCanvas, ctx: offCanvas.getContext('2d') });
+            timerInterval = setInterval(() => {
+                ensureAudioContext(); currentSeconds--; disp.textContent = currentSeconds;
+                if (timerState === "SHOOT" && currentSeconds <= 10 && currentSeconds > 0) { triggerShortTone(audioCtx.currentTime); }
+                if (timerState === "PREP" && currentSeconds <= 0) {
+                    timerState = "SHOOT"; currentSeconds = parseInt(document.getElementById('cfgShootSec').value);
+                    box.className = "timer-box shoot-phase"; disp.style.color = "#2ecc71"; status.innerHTML = "🏹 射擊中<br>計時獨立"; disp.textContent = currentSeconds;
+                    playBeep('shoot_1short');
+                } else if (timerState === "SHOOT" && currentSeconds <= 0) {
+                    clearInterval(timerInterval); timerState = "IDLE"; box.className = "timer-box"; disp.style.color = "#ff3333"; status.innerHTML = "🛑 時間到"; 
+                    playBeep('timeup_1long');
                 }
-                ringWriteIdx = 0; isBufferFull = false;
-            };
+            }, 1000);
+        }
+    }
 
-            let lastFrameTime = 0; const frameInterval = 1000 / FPS;
-            function processFrame(timestamp) {
-                if (!document.getElementById('chkCamActive').checked) return;
-                if (!lastFrameTime) lastFrameTime = timestamp;
-                
-                if (timestamp - lastFrameTime >= frameInterval) {
-                    lastFrameTime = timestamp;
-                    const w = canvas.width; const h = canvas.height;
-                    if(canvasRingBuffer.length === TOTAL_BUFF_FRAMES) {
-                        let slot = canvasRingBuffer[ringWriteIdx];
-                        slot.ctx.drawImage(videoEl, 0, 0, w, h);
-                        
-                        if (isBufferFull) {
-                            lbl.innerHTML = "<span style='color:#2ecc71;'>🟢 25秒自拍動態時空回放中</span>";
-                            let readIdx = (ringWriteIdx + 1) % TOTAL_BUFF_FRAMES;
-                            ctx.clearRect(0, 0, w, h); ctx.drawImage(canvasRingBuffer[readIdx].cvs, 0, 0);
-                        } else {
-                            ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h);
-                            ctx.fillStyle = "#e67e22"; ctx.fillRect(0, h - 12, ((ringWriteIdx + 1) / TOTAL_BUFF_FRAMES) * w, 12);
-                            lbl.innerHTML = "⏳ 時空緩衝建立中... (" + Math.round(((ringWriteIdx + 1)/TOTAL_BUFF_FRAMES)*100) + "%)";
-                        }
-                        
-                        ringWriteIdx = (ringWriteIdx + 1) % TOTAL_BUFF_FRAMES;
-                        if(ringWriteIdx === 0) isBufferFull = true;
+    // 🎥 輕量化時空環狀快取模組
+    let videoStream = null; let camAnimationId = null;
+    const MAX_DELAY_SEC = 25; const FPS = 20; 
+    const TOTAL_BUFF_FRAMES = MAX_DELAY_SEC * FPS;
+    let canvasRingBuffer = []; let ringWriteIdx = 0; let isBufferFull = false;
+
+    function toggleCameraHardware() {
+        const isChecked = document.getElementById('chkCamActive').checked;
+        const lbl = document.getElementById('camStatusLabel'); const canvas = document.getElementById('camCanvas'); const ctx = canvas.getContext('2d');
+        const videoEl = document.getElementById('hiddenVideo');
+        
+        if (isChecked) {
+            lbl.innerHTML = "⏳ 正在啟動相機模組...";
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+            .then(stream => {
+                videoStream = stream; videoEl.srcObject = stream;
+                videoEl.onloadedmetadata = function() {
+                    const vW = videoEl.videoWidth || 640; const vH = videoEl.videoHeight || 480;
+                    canvas.width = vW; canvas.height = vH;
+                    clearRingBuffer();
+                    for(let i=0; i<TOTAL_BUFF_FRAMES; i++) {
+                        let offCanvas = document.createElement('canvas'); offCanvas.width = vW; offCanvas.height = vH;
+                        canvasRingBuffer.push({ cvs: offCanvas, ctx: offCanvas.getContext('2d') });
                     }
+                    ringWriteIdx = 0; isBufferFull = false;
+                };
+
+                let lastFrameTime = 0; const frameInterval = 1000 / FPS;
+                function processFrame(timestamp) {
+                    if (!document.getElementById('chkCamActive').checked) return;
+                    if (!lastFrameTime) lastFrameTime = timestamp;
+                    
+                    if (timestamp - lastFrameTime >= frameInterval) {
+                        lastFrameTime = timestamp;
+                        const w = canvas.width; const h = canvas.height;
+                        if(canvasRingBuffer.length === TOTAL_BUFF_FRAMES) {
+                            let slot = canvasRingBuffer[ringWriteIdx];
+                            slot.ctx.drawImage(videoEl, 0, 0, w, h);
+                            
+                            if (isBufferFull) {
+                                lbl.innerHTML = "<span style='color:#2ecc71;'>🟢 25秒自拍動態時空回放中</span>";
+                                let readIdx = (ringWriteIdx + 1) % TOTAL_BUFF_FRAMES;
+                                ctx.clearRect(0, 0, w, h); ctx.drawImage(canvasRingBuffer[readIdx].cvs, 0, 0);
+                            } else {
+                                ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h);
+                                ctx.fillStyle = "#e67e22"; ctx.fillRect(0, h - 12, ((ringWriteIdx + 1) / TOTAL_BUFF_FRAMES) * w, 12);
+                                lbl.innerHTML = "⏳ 時空緩衝建立中... (" + Math.round(((ringWriteIdx + 1)/TOTAL_BUFF_FRAMES)*100) + "%)";
+                            }
+                            
+                            ringWriteIdx = (ringWriteIdx + 1) % TOTAL_BUFF_FRAMES;
+                            if(ringWriteIdx === 0) isBufferFull = true;
+                        }
+                    }
+                    camAnimationId = requestAnimationFrame(processFrame);
                 }
                 camAnimationId = requestAnimationFrame(processFrame);
-            }
-            camAnimationId = requestAnimationFrame(processFrame);
-        }).catch((e) => { 
-            console.error(e); lbl.textContent = "❌ 無法存取自拍相機"; document.getElementById('chkCamActive').checked = false;
-        });
-    } else {
-        if (videoStream) { videoStream.getTracks().forEach(track => track.stop()); videoStream = null; }
-        if (camAnimationId) { cancelAnimationFrame(camAnimationId); camAnimationId = null; }
-        clearRingBuffer(); ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); lbl.textContent = "📷 鏡頭已關閉省電中";
-    }
-}
-
-function clearRingBuffer() {
-    canvasRingBuffer.forEach(slot => { slot.cvs.width = 0; slot.cvs.height = 0; slot.cvs = null; slot.ctx = null; });
-    canvasRingBuffer = []; isBufferFull = false; ringWriteIdx = 0;
-}
-
-function updateSvgTargetSkin() {
-    const group = document.getElementById('targetDynamicRingsGroup');
-    group.innerHTML = ""; 
-    const targetType = document.getElementById('targetSizeSelect').value;
-
-    const C_WHITE  = "#ffffff"; const C_BLACK  = "#121212"; const C_BLUE   = "#00bfff";
-    const C_RED    = "#ff4500"; const C_YELLOW = "#ffd700"; const strokeC  = "#cc3300";
-
-    const standardRings = [
-        { r: 150,  f: C_WHITE,  s: "#ccc" }, { r: 135,  f: C_WHITE,  s: "#ccc" },
-        { r: 120,  f: C_BLACK,  s: "#444" }, { r: 105,  f: C_BLACK,  s: "#444" },
-        { r: 90,   f: C_BLUE,   s: "#0099cc" }, { r: 75,   f: C_BLUE,   s: "#0099cc" },
-        { r: 60,   f: C_RED,    s: strokeC }, { r: 45,   f: C_RED,    s: strokeC },
-        { r: 30,   f: C_YELLOW, s: "#e6b800" }, { r: 15,   f: C_YELLOW, s: strokeC }
-    ];
-
-    function drawOneSet(cx, cy, maxR, startIdx) {
-        const activeRings = standardRings.slice(startIdx);
-        const ratio = maxR / activeRings[0].r; 
-        activeRings.forEach((ring, idx) => {
-            let currentR = ring.r * ratio;
-            let c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", currentR);
-            c.setAttribute("fill", ring.f); c.setAttribute("stroke", ring.s);
-            c.setAttribute("stroke-width", "0.5");
-            group.appendChild(c);
-        });
-        let innermostR = 7.5 * ratio;
-        let innerC = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        innerC.setAttribute("cx", cx); innerC.setAttribute("cy", cy); innerC.setAttribute("r", innermostR);
-        innerC.setAttribute("fill", "none"); innerC.setAttribute("stroke", strokeC);
-        innerC.setAttribute("stroke-width", "0.5"); innerC.setAttribute("stroke-dasharray", "1,1");
-        group.appendChild(innerC);
-    }
-
-    if (targetType === "triple_target") {
-        drawOneSet(150, 60,  42, 5); 
-        drawOneSet(150, 150, 42, 5); 
-        drawOneSet(150, 240, 42, 5); 
-    } else if (targetType === "50m_compound") {
-        drawOneSet(150, 150, 150, 4);
-    } else {
-        drawOneSet(150, 150, 150, 0);
-    }
-}
-
-let scale = 1, posX = 0, posY = 0; let isDragging = false; let startX = 0, startY = 0; let touchStartDist = 0;
-function initPanZoomTarget() {
-    const targetSvg = document.getElementById('archeryTarget'); 
-    const holder = document.getElementById('svgHolder');
-    
-    function applyTransform() { targetSvg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`; }
-    
-    holder.addEventListener('touchstart', function(e) {
-        if (e.touches.length === 2) { 
-            isDragging = false; 
-            touchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); 
-        } 
-        else if (e.touches.length === 1) { 
-            if (!document.getElementById('chkScoreMode').checked) { 
-                isDragging = true; 
-                startX = e.touches[0].clientX - posX; 
-                startY = e.touches[0].clientY - posY; 
-            } 
-        }
-    }, { passive: true });
-    
-    holder.addEventListener('touchmove', function(e) {
-        if (e.touches.length === 2 && touchStartDist > 0) {
-            let dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); 
-            let rect = holder.getBoundingClientRect();
-            let midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left; 
-            let midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
-            let oldScale = scale; 
-            let factor = dist / touchStartDist; 
-            scale = Math.max(1, Math.min(12, scale * factor));
-            posX = midX - (midX - posX) * (scale / oldScale); 
-            posY = midY - (midY - posY) * (scale / oldScale); 
-            touchStartDist = dist; 
-            applyTransform();
-        } else if (e.touches.length === 1 && isDragging) { 
-            posX = e.touches[0].clientX - startX; 
-            posY = e.touches[0].clientY - startY; 
-            applyTransform(); 
-        }
-    }, { passive: true });
-    
-    holder.addEventListener('touchend', function(e) { 
-        if (e.touches.length < 2) touchStartDist = 0; 
-        if (e.touches.length === 0) isDragging = false; 
-    });
-
-    holder.onpointerdown = function(e) {
-        ensureAudioContext(); 
-        if (!document.getElementById('chkScoreMode').checked) return; 
-        if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
-        
-        const pt = targetSvg.createSVGPoint();
-        pt.x = e.clientX; pt.y = e.clientY;
-        const svgP = pt.matrixTransform(targetSvg.getScreenCTM().inverse());
-        const svgX = svgP.x; const svgY = svgP.y;
-
-        const targetType = document.getElementById('targetSizeSelect').value;
-        let finalScore = 0; let finalDisplay = "M"; let finalDistance = 0;
-
-        if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) {
-            finalScore = 0; finalDisplay = "M";
-            finalDistance = Math.sqrt(Math.pow(svgX - 150, 2) + Math.pow(svgY - 150, 2));
+            }).catch((e) => { 
+                console.error(e); lbl.textContent = "❌ 無法存取自拍相機"; document.getElementById('chkCamActive').checked = false;
+            });
         } else {
+            if (videoStream) { videoStream.getTracks().forEach(track => track.stop()); videoStream = null; }
+            if (camAnimationId) { cancelAnimationFrame(camAnimationId); camAnimationId = null; }
+            clearRingBuffer(); ctx.fillStyle = "#000"; ctx.fillRect(0, 0, canvas.width, canvas.height); lbl.textContent = "📷 鏡頭已關閉省電中";
+        }
+    }
+
+    function clearRingBuffer() {
+        canvasRingBuffer.forEach(slot => { slot.cvs.width = 0; slot.cvs.height = 0; slot.cvs = null; slot.ctx = null; });
+        canvasRingBuffer = []; isBufferFull = false; ringWriteIdx = 0;
+    }
+
+    // 🎨 國際標準 WA 射箭同心圓、特規六環靶、垂直三環靶動態渲染
+    function updateSvgTargetSkin() {
+        const group = document.getElementById('targetDynamicRingsGroup');
+        group.innerHTML = ""; // 刷清舊靶面
+        const targetType = document.getElementById('targetSizeSelect').value;
+
+        // 顏色定義
+        const C_WHITE  = "#ffffff"; const C_BLACK  = "#121212"; const C_BLUE   = "#00bfff";
+        const C_RED    = "#ff4500"; const C_YELLOW = "#ffd700"; const strokeC  = "#cc3300";
+
+        // 全靶 10 環半徑基礎定義(符合原本 300x300 viewBox 比例)
+        const standardRings = [
+            { r: 150,  f: C_WHITE,  s: "#ccc" }, { r: 135,  f: C_WHITE,  s: "#ccc" },
+            { r: 120,  f: C_BLACK,  s: "#444" }, { r: 105,  f: C_BLACK,  s: "#444" },
+            { r: 90,   f: C_BLUE,   s: "#0099cc" }, { r: 75,   f: C_BLUE,   s: "#0099cc" },
+            { r: 60,   f: C_RED,    s: strokeC }, { r: 45,   f: C_RED,    s: strokeC },
+            { r: 30,   f: C_YELLOW, s: "#e6b800" }, { r: 15,   f: C_YELLOW, s: strokeC }
+        ];
+
+        function drawOneSet(cx, cy, maxR, startIdx) {
+            const activeRings = standardRings.slice(startIdx);
+            const ratio = maxR / activeRings[0].r; // 等比例縮放因數
+            activeRings.forEach((ring, idx) => {
+                let currentR = ring.r * ratio;
+                let c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", currentR);
+                c.setAttribute("fill", ring.f); c.setAttribute("stroke", ring.s);
+                c.setAttribute("stroke-width", "0.5");
+                group.appendChild(c);
+            });
+            // 補上內10分十字線/虛線圓
+            let innermostR = 7.5 * ratio;
+            let innerC = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            innerC.setAttribute("cx", cx); innerC.setAttribute("cy", cy); innerC.setAttribute("r", innermostR);
+            innerC.setAttribute("fill", "none"); innerC.setAttribute("stroke", strokeC);
+            innerC.setAttribute("stroke-width", "0.5"); innerC.setAttribute("stroke-dasharray", "1,1");
+            group.appendChild(innerC);
+        }
+
+        if (targetType === "triple_target") {
+            // 🎯 特規：18米室內三環靶 (垂直排列三連體，只取 6 至 10 分)
+            // 每個小靶最外圈是6分(藍色)，對應 standardRings 索引 5
+            drawOneSet(150, 60,  42, 5); // 上靶心
+            drawOneSet(150, 150, 42, 5); // 中靶心
+            drawOneSet(150, 240, 42, 5); // 下靶心
+        } else if (targetType === "50m_compound") {
+            // 🎯 特規：50米複合弓六環靶 (最外圈是5分藍色，對應索引 4)
+            drawOneSet(150, 150, 150, 4);
+        } else {
+            // 🎯 標準全靶 (10環全開 1-10分，對應索引 0)
+            drawOneSet(150, 150, 150, 0);
+        }
+    }
+
+    // 🎯 智能點靶、縮放與運科指標連動核心
+    let scale = 1, posX = 0, posY = 0; let isDragging = false; let startX = 0, startY = 0; let touchStartDist = 0;
+    function initPanZoomTarget() {
+        const targetSvg = document.getElementById('archeryTarget'); const holder = document.getElementById('svgHolder');
+        function applyTransform() { targetSvg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`; }
+        
+        holder.addEventListener('touchstart', function(e) {
+            if (e.touches.length === 2) { isDragging = false; touchStartDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); } 
+            else if (e.touches.length === 1) { if (!document.getElementById('chkScoreMode').checked) { isDragging = true; startX = e.touches[0].clientX - posX; startY = e.touches[0].clientY - posY; } }
+        }, { passive: true });
+        
+        holder.addEventListener('touchmove', function(e) {
+            if (e.touches.length === 2 && touchStartDist > 0) {
+                let dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY); let rect = holder.getBoundingClientRect();
+                let midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left; let midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top;
+                let oldScale = scale; let factor = dist / touchStartDist; scale = Math.max(1, Math.min(12, scale * factor));
+                posX = midX - (midX - posX) * (scale / oldScale); posY = midY - (midY - posY) * (scale / oldScale); touchStartDist = dist; applyTransform();
+            } else if (e.touches.length === 1 && isDragging) { posX = e.touches[0].clientX - startX; posY = e.touches[0].clientY - startY; applyTransform(); }
+        }, { passive: true });
+        
+        holder.addEventListener('touchend', function(e) { if (e.touches.length < 2) touchStartDist = 0; if (e.touches.length === 0) isDragging = false; });
+
+        // 精確落點解算
+        targetSvg.onpointerdown = function(e) {
+            ensureAudioContext(); 
+            if (!document.getElementById('chkScoreMode').checked) return; 
+            if (globalArrowCount >= TOTAL_ARROWS_LIMIT) return;
+            
+            const rect = targetSvg.getBoundingClientRect(); 
+            const svgX = ((e.clientX - rect.left) / rect.width) * 300; 
+            const svgY = ((e.clientY - rect.top) / rect.height) * 300;
+            if (svgX < 0 || svgX > 300 || svgY < 0 || svgY > 300) return; 
+
+            const targetType = document.getElementById('targetSizeSelect').value;
+            let finalScore = 0; let finalDisplay = "M"; let finalDistance = 0;
+
+            // 分流解算不同規格的得分
             if (targetType === "triple_target") {
+                // 三環靶：找出離哪一個靶心最近
                 const subCenters = [60, 150, 240];
                 let closestCenterY = 150; let minD = 999;
                 subCenters.forEach(cy => {
@@ -514,6 +679,7 @@ function initPanZoomTarget() {
                     if (d < minD) { minD = d; closestCenterY = cy; }
                 });
                 finalDistance = minD;
+                // 三環靶半徑對應：總半徑 42 為 6分環，以此類推等分 5 區 (6,7,8,9,10分)
                 let step = 42 / 5;
                 if (finalDistance <= step * 0.5) { finalScore = 10; finalDisplay = "X"; }
                 else if (finalDistance <= step) { finalScore = 10; finalDisplay = "10"; }
@@ -522,6 +688,7 @@ function initPanZoomTarget() {
                 else if (finalDistance <= step * 4) { finalScore = 7; finalDisplay = "7"; }
                 else if (finalDistance <= step * 5) { finalScore = 6; finalDisplay = "6"; }
             } else {
+                // 標準單靶與複合弓六環靶
                 finalDistance = Math.sqrt(Math.pow(svgX - 150, 2) + Math.pow(svgY - 150, 2));
                 const LINE_B = 0.4;
                 const RING_RADII = [
@@ -539,133 +706,126 @@ function initPanZoomTarget() {
                         finalScore = zone.score; finalDisplay = zone.display; detected = true; break; 
                     } 
                 }
-                if (!detected) { finalScore = 0; finalDisplay = "M"; } 
+                // 複合弓截斷保護（低於5分即為脫靶）
                 if (targetType === "50m_compound" && finalScore < 5) { finalScore = 0; finalDisplay = "M"; }
             }
-        }
 
-        fullRoundData[currentEnd][currentIndex] = { 
-            x: Math.max(0, Math.min(300, svgX)), 
-            y: Math.max(0, Math.min(300, svgY)), 
-            score: finalScore, 
-            display: finalDisplay, 
-            dist: finalDistance 
+            // 寫入全域資料結構
+            fullRoundData[currentEnd][currentIndex] = { 
+                x: Math.max(0, Math.min(300, svgX)), 
+                y: Math.max(0, Math.min(300, svgY)), 
+                score: finalScore, 
+                display: finalDisplay, 
+                dist: finalDistance 
+            };
+            
+            document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = finalDisplay;
+            globalArrowCount++; 
+            recalculateTotals(); 
+            handleLayerAndMetricsChange(); 
+            currentIndex++;
+            
+            if (currentIndex >= ARROWS_PER_END) { currentIndex = 0; currentEnd++; }
+            if (globalArrowCount >= TOTAL_ARROWS_LIMIT) {
+                const upBtn = document.getElementById('btnUpload'); upBtn.disabled = false; upBtn.style.opacity = "1";
+                upBtn.textContent = "🎉 滿箭！上傳雲端資料庫"; document.getElementById('chkScoreMode').checked = false; 
+            }
+            updateActiveHighlight();
         };
-        
-        document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = finalDisplay;
-        globalArrowCount++; 
-        recalculateTotals(); 
-        handleLayerAndMetricsChange(); 
-        currentIndex++;
-        
-        if (currentIndex >= ARROWS_PER_END) { currentIndex = 0; currentEnd++; }
-        if (globalArrowCount >= TOTAL_ARROWS_LIMIT) {
-            const upBtn = document.getElementById('btnUpload'); upBtn.disabled = false; upBtn.style.opacity = "1";
-            upBtn.textContent = "🎉 滿箭！上傳雲端資料庫"; document.getElementById('chkScoreMode').checked = false; 
-        }
-        updateActiveHighlight();
-        
-        saveToLocalStorage(); 
-    };
-}
-
-function handleLayerAndMetricsChange() { renderClustersAndArrows(); calculateMultiEndMetrics(); }
-
-function calculateMultiEndMetrics() {
-    let allSelectedArrows = []; let allScores = [];
-    fullRoundData.forEach((endArrows, eIdx) => { if (document.getElementById(`chk-end-${eIdx}`)?.checked) { endArrows.forEach(a => { if (a) { allSelectedArrows.push(a); allScores.push(a.score); } }); } });
-    if (allSelectedArrows.length === 0) {
-        document.getElementById('mAccuracy').textContent = "--"; document.getElementById('mPrecision').textContent = "--"; document.getElementById('mStability').textContent = "--"; document.getElementById('mEndAvg').textContent = "--"; return;
     }
-    let totalDist = allSelectedArrows.reduce((sum, a) => sum + a.dist, 0); document.getElementById('mAccuracy').textContent = (totalDist / allSelectedArrows.length).toFixed(1) + "px";
-    let totalScoreSum = allScores.reduce((sum, s) => sum + s, 0); let avgScore = totalScoreSum / allScores.length; document.getElementById('mEndAvg').textContent = avgScore.toFixed(2) + " 分";
-    let variance = allScores.reduce((sum, s) => sum + Math.pow(s - avgScore, 2), 0) / allScores.length; document.getElementById('mStability').textContent = Math.sqrt(variance).toFixed(1);
 
-    if (allSelectedArrows.length >= 3) {
-        let coreArrows = [...allSelectedArrows]; let globalX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length; let globalY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
-        let worstIdx = 0; let maxD = -1; coreArrows.forEach((a, i) => { let d = Math.pow(a.x - globalX, 2) + Math.pow(a.y - globalY, 2); if (d > maxD) { maxD = d; worstIdx = i; } }); coreArrows.splice(worstIdx, 1);
-        let newX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length; let newY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
-        let maxSpread = Math.max(...coreArrows.map(a => Math.sqrt(Math.pow(a.x - newX, 2) + Math.pow(a.y - newY, 2)))); document.getElementById('mPrecision').textContent = (maxSpread * 2).toFixed(1) + "px";
-    } else { document.getElementById('mPrecision').textContent = "--"; }
-}
+    function handleLayerAndMetricsChange() { renderClustersAndArrows(); calculateMultiEndMetrics(); }
 
-function renderClustersAndArrows() {
-    const clusterGroup = document.getElementById('clusterLayerGroup'); const arrowGroup = document.getElementById('arrowGroup');
-    clusterGroup.innerHTML = ""; arrowGroup.innerHTML = "";
-    fullRoundData.forEach((endArrows, eIdx) => {
-        if (!document.getElementById(`chk-end-${eIdx}`)?.checked) return; let validArrows = endArrows.filter(a => a !== undefined); if (validArrows.length === 0) return;
-        if (validArrows.length >= 3) {
-            let allX = validArrows.reduce((sum, a) => sum + a.x, 0) / validArrows.length; let allY = validArrows.reduce((sum, a) => sum + a.y, 0) / validArrows.length;
-            let maxSpread = Math.max(...validArrows.map(a => Math.sqrt(Math.pow(a.x - allX, 2) + Math.pow(a.y - allY, 2))));
-            const outerStorm = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            outerStorm.setAttribute("cx", allX); outerStorm.setAttribute("cy", allY); outerStorm.setAttribute("r", Math.max(maxSpread + 4, 15));
-            outerStorm.setAttribute("fill", STORM_COLORS[eIdx % 6].outer); outerStorm.setAttribute("stroke", STORM_COLORS[eIdx % 6].inner);
-            outerStorm.setAttribute("stroke-width", "0.8"); outerStorm.setAttribute("stroke-dasharray", "3,2"); clusterGroup.appendChild(outerStorm);
+    function calculateMultiEndMetrics() {
+        let allSelectedArrows = []; let allScores = [];
+        fullRoundData.forEach((endArrows, eIdx) => { if (document.getElementById(`chk-end-${eIdx}`)?.checked) { endArrows.forEach(a => { if (a) { allSelectedArrows.push(a); allScores.push(a.score); } }); } });
+        if (allSelectedArrows.length === 0) {
+            document.getElementById('mAccuracy').textContent = "--"; document.getElementById('mPrecision').textContent = "--"; document.getElementById('mStability').textContent = "--"; document.getElementById('mEndAvg').textContent = "--"; return;
         }
-        validArrows.forEach((arrow) => {
-            const c = document.createElementNS("http://www.w3.org/2000/svg", "circle"); c.setAttribute("cx", arrow.x); c.setAttribute("cy", arrow.y); c.setAttribute("r", "1.5");
-            c.setAttribute("fill", STORM_COLORS[eIdx % 6].inner); c.setAttribute("stroke", "#ffffff"); c.setAttribute("stroke-width", "0.3"); arrowGroup.appendChild(c);
+        let totalDist = allSelectedArrows.reduce((sum, a) => sum + a.dist, 0); document.getElementById('mAccuracy').textContent = (totalDist / allSelectedArrows.length).toFixed(1) + "px";
+        let totalScoreSum = allScores.reduce((sum, s) => sum + s, 0); let avgScore = totalScoreSum / allScores.length; document.getElementById('mEndAvg').textContent = avgScore.toFixed(2) + " 分";
+        let variance = allScores.reduce((sum, s) => sum + Math.pow(s - avgScore, 2), 0) / allScores.length; document.getElementById('mStability').textContent = Math.sqrt(variance).toFixed(1);
+
+        if (allSelectedArrows.length >= 3) {
+            let coreArrows = [...allSelectedArrows]; let globalX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length; let globalY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
+            let worstIdx = 0; let maxD = -1; coreArrows.forEach((a, i) => { let d = Math.pow(a.x - globalX, 2) + Math.pow(a.y - globalY, 2); if (d > maxD) { maxD = d; worstIdx = i; } }); coreArrows.splice(worstIdx, 1);
+            let newX = coreArrows.reduce((sum, a) => sum + a.x, 0) / coreArrows.length; let newY = coreArrows.reduce((sum, a) => sum + a.y, 0) / coreArrows.length;
+            let maxSpread = Math.max(...coreArrows.map(a => Math.sqrt(Math.pow(a.x - newX, 2) + Math.pow(a.y - newY, 2)))); document.getElementById('mPrecision').textContent = (maxSpread * 2).toFixed(1) + "px";
+        } else { document.getElementById('mPrecision').textContent = "--"; }
+    }
+
+    function renderClustersAndArrows() {
+        const clusterGroup = document.getElementById('clusterLayerGroup'); const arrowGroup = document.getElementById('arrowGroup');
+        clusterGroup.innerHTML = ""; arrowGroup.innerHTML = "";
+        fullRoundData.forEach((endArrows, eIdx) => {
+            if (!document.getElementById(`chk-end-${eIdx}`)?.checked) return; let validArrows = endArrows.filter(a => a !== undefined); if (validArrows.length === 0) return;
+            if (validArrows.length >= 3) {
+                let allX = validArrows.reduce((sum, a) => sum + a.x, 0) / validArrows.length; let allY = validArrows.reduce((sum, a) => sum + a.y, 0) / validArrows.length;
+                let maxSpread = Math.max(...validArrows.map(a => Math.sqrt(Math.pow(a.x - allX, 2) + Math.pow(a.y - allY, 2))));
+                const outerStorm = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                outerStorm.setAttribute("cx", allX); outerStorm.setAttribute("cy", allY); outerStorm.setAttribute("r", Math.max(maxSpread + 4, 15));
+                outerStorm.setAttribute("fill", STORM_COLORS[eIdx % 6].outer); outerStorm.setAttribute("stroke", STORM_COLORS[eIdx % 6].inner);
+                outerStorm.setAttribute("stroke-width", "0.8"); outerStorm.setAttribute("stroke-dasharray", "3,2"); clusterGroup.appendChild(outerStorm);
+            }
+            validArrows.forEach((arrow) => {
+                const c = document.createElementNS("http://www.w3.org/2000/svg", "circle"); c.setAttribute("cx", arrow.x); c.setAttribute("cy", arrow.y); c.setAttribute("r", "1.5");
+                c.setAttribute("fill", STORM_COLORS[eIdx % 6].inner); c.setAttribute("stroke", "#ffffff"); c.setAttribute("stroke-width", "0.3"); arrowGroup.appendChild(c);
+            });
         });
-    });
-}
-
-function recalculateTotals() {
-    let runTotal = 0;
-    for (let e = 0; e < TOTAL_ROWS; e++) {
-        let endSum = fullRoundData[e].reduce((sum, a) => sum + (a ? a.score : 0), 0); runTotal += endSum;
-        if(document.getElementById(`endTotal-${e}`)) document.getElementById(`endTotal-${e}`).textContent = endSum; 
-        if(document.getElementById(`runTotal-${e}`)) document.getElementById(`runTotal-${e}`).textContent = runTotal;
     }
-}
 
-function undoLastArrow() {
-    if (globalArrowCount === 0) return;
-    globalArrowCount--;
-    if (currentIndex === 0) { currentEnd--; currentIndex = ARROWS_PER_END - 1; } else { currentIndex--; }
-    fullRoundData[currentEnd][currentIndex] = undefined;
-    document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = "-";
-    const upBtn = document.getElementById('btnUpload'); upBtn.disabled = true; upBtn.style.opacity = "0.4";
-    upBtn.textContent = "💾 請先完成總箭數";
-    recalculateTotals(); handleLayerAndMetricsChange(); updateActiveHighlight();
-    
-    saveToLocalStorage(); 
-}
+    function recalculateTotals() {
+        let runTotal = 0;
+        for (let e = 0; e < TOTAL_ROWS; e++) {
+            let endSum = fullRoundData[e].reduce((sum, a) => sum + (a ? a.score : 0), 0); runTotal += endSum;
+            if(document.getElementById(`endTotal-${e}`)) document.getElementById(`endTotal-${e}`).textContent = endSum; 
+            if(document.getElementById(`runTotal-${e}`)) document.getElementById(`runTotal-${e}`).textContent = runTotal;
+        }
+    }
 
-function sendAllToSheets() {
-    const upBtn = document.getElementById('btnUpload'); upBtn.disabled = true; upBtn.textContent = "⚡ 正在直傳雲端資料庫...";
-    const currentMetrics = {
-        accuracy: document.getElementById('mAccuracy').textContent,
-        precision: document.getElementById('mPrecision').textContent,
-        stability: document.getElementById('mStability').textContent
-    };
-    const payload = {
-        action: "uploadFullRound", athleteId: GLOBAL_ATHLETE_ID, userName: GLOBAL_USER_NAME,
-        data: JSON.stringify(fullRoundData), metrics: JSON.stringify(currentMetrics)
-    };
-    var formBody = []; for (var property in payload) { formBody.push(encodeURIComponent(property) + "=" + encodeURIComponent(payload[property])); }
-    formBody = formBody.join("&");
-    fetch(GAS_API_URL, {
-        method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: formBody
-    })
-    .then(res => res.json())
-    .then(response => {
-        if(response.status === "success") { 
-            alert("🎉 資料已成功排入雲端同步序列！"); 
-            upBtn.textContent = "💾 傳輸完成"; 
-            localStorage.removeItem("beichen_archery_autosave"); 
-        } 
-        else { alert("❌ 資料庫回傳失敗: " + response.message); upBtn.disabled = false; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫"; }
-    })
-    .catch(err => {
-        console.error("傳輸失敗:", err); alert("🎉 直傳請求已發送（請至試算表確認是否有正常入庫）。");
-        upBtn.disabled = false; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
-    });
-}
+    function undoLastArrow() {
+        if (globalArrowCount === 0) return;
+        globalArrowCount--;
+        if (currentIndex === 0) { currentEnd--; currentIndex = ARROWS_PER_END - 1; } else { currentIndex--; }
+        fullRoundData[currentEnd][currentIndex] = undefined;
+        document.getElementById(`cell-${currentEnd}-${currentIndex}`).textContent = "-";
+        const upBtn = document.getElementById('btnUpload'); upBtn.disabled = true; upBtn.style.opacity = "0.4";
+        upBtn.textContent = "💾 請先完成總箭數";
+        recalculateTotals(); handleLayerAndMetricsChange(); updateActiveHighlight();
+    }
 
-window.addEventListener('DOMContentLoaded', () => {
-    const hasLoaded = loadFromLocalStorage(); 
-    if (!hasLoaded) {
+    function sendAllToSheets() {
+        const upBtn = document.getElementById('btnUpload'); upBtn.disabled = true; upBtn.textContent = "⚡ 正在直傳雲端資料庫...";
+        const currentMetrics = {
+            accuracy: document.getElementById('mAccuracy').textContent,
+            precision: document.getElementById('mPrecision').textContent,
+            stability: document.getElementById('mStability').textContent
+        };
+        const payload = {
+            action: "uploadFullRound", athleteId: GLOBAL_ATHLETE_ID, userName: GLOBAL_USER_NAME,
+            data: JSON.stringify(fullRoundData), metrics: JSON.stringify(currentMetrics)
+        };
+        var formBody = []; for (var property in payload) { formBody.push(encodeURIComponent(property) + "=" + encodeURIComponent(payload[property])); }
+        formBody = formBody.join("&");
+        fetch(GAS_API_URL, {
+            method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" }, body: formBody
+        })
+        .then(res => res.json())
+        .then(response => {
+            if(response.status === "success") { alert("🎉 資料已成功排入雲端同步序列！"); upBtn.textContent = "💾 傳輸完成"; } 
+            else { alert("❌ 資料庫回傳失敗: " + response.message); upBtn.disabled = false; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫"; }
+        })
+        .catch(err => {
+            console.error("傳輸失敗:", err); alert("🎉 直傳請求已發送（請至試算表確認是否有正常入庫）。");
+            upBtn.disabled = false; upBtn.textContent = "🎉 滿箭！上傳雲端資料庫";
+        });
+    }
+
+    // 初始化下拉顯示狀態
+    window.addEventListener('DOMContentLoaded', () => {
         handleMatchTypeChange();
         updateSvgTargetSkin();
-    }
-});
+    });
+</script>
+</body>
+</html>
