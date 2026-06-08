@@ -347,25 +347,52 @@
         }
     }
 
-    function ensureAudioContext() {
-        if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-        if (audioCtx && audioCtx.state === 'suspended') { audioCtx.resume(); }
+function triggerShortTone(startTime) {
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        
+        // 改用 'square' 方波，聽起來會更像電子鳴笛聲
+        osc.type = 'square'; 
+        osc.frequency.setValueAtTime(800, startTime);
+        
+        gain.gain.setValueAtTime(0.8, startTime);
+        // 快速衰減，讓聲音聽起來乾脆俐落
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.15);
+        
+        osc.start(startTime);
+        osc.stop(startTime + 0.2);
     }
 
     function playBeep(type) {
         try {
             ensureAudioContext();
             const now = audioCtx.currentTime;
+            
             if (type === 'prep_2short') {
-                triggerShortTone(now); triggerShortTone(now + 0.25);
+                // 兩聲短音
+                triggerShortTone(now); 
+                triggerShortTone(now + 0.3); // 間隔稍拉大一點點，更有節奏感
             } else if (type === 'shoot_1short') {
                 triggerShortTone(now);
             } else if (type === 'timeup_1long') {
-                let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
-                osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'sine';
-                osc.frequency.setValueAtTime(800, now); gain.gain.setValueAtTime(0.8, now);
-                gain.gain.setValueAtTime(0.8, now + 1.2); gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
-                osc.start(now); osc.stop(now + 1.5);
+                let osc = audioCtx.createOscillator();
+                let gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                // 長音同樣使用方波
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(800, now);
+                
+                gain.gain.setValueAtTime(0.8, now);
+                // 保持 1.2 秒的延音後，再快速衰減
+                gain.gain.setValueAtTime(0.8, now + 1.2);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+                
+                osc.start(now);
+                osc.stop(now + 1.5);
             }
         } catch(e) { console.log("Audio Error:", e); }
     }
