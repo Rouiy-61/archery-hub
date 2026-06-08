@@ -3,112 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>北辰射箭計分運科系統 v1.7.0</title>
+    <title>北辰射箭計分系統 (完整版)</title>
     <style>
-        :root { --bg-color: #121212; --card-bg: #1e1e1e; --gold: #ffd700; --text: #ffffff; --grid-border: #333; }
-        body { font-family: -apple-system, sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 10px; display: flex; flex-direction: column; align-items: center; }
-        .container { width: 100%; max-width: 440px; }
-        .svg-holder { width: 100%; max-width: 290px; height: 290px; margin: 0 auto; background: #1a1a1a; touch-action: none; overflow: hidden; }
-        .active-cell { background-color: rgba(255, 215, 0, 0.3) !important; border: 2px solid var(--gold) !important; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: center; }
-        th, td { border: 1px solid #333; padding: 4px; }
-        #arrowGroup circle { transition: all 0.2s ease; }
+        :root { --bg-color: #121212; --card-bg: #1e1e1e; --gold: #ffd700; --text: #ffffff; }
+        body { font-family: sans-serif; background-color: var(--bg-color); color: var(--text); margin: 0; padding: 10px; }
+        .svg-holder { width: 100%; max-width: 290px; height: 290px; margin: 0 auto; background: #fff; cursor: crosshair; }
+        .control-panel { max-width: 440px; margin: 10px auto; }
+        table { width: 100%; border-collapse: collapse; color: #fff; }
+        th, td { border: 1px solid #444; padding: 5px; text-align: center; font-size: 12px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h3>北辰射箭計分系統</h3>
-    <div id="targetWrapper">
-        <div class="svg-holder" id="svgHolder">
-            <svg id="archeryTarget" viewBox="0 0 300 300">
-                <rect x="0" y="0" width="300" height="300" fill="#ffffff" id="whiteTargetBackground"/>
-                <g id="targetDynamicRingsGroup"></g>
-                <g id="clusterLayerGroup"></g>
-                <g id="arrowGroup"></g>
-            </svg>
-        </div>
+<div class="control-panel">
+    <button onclick="exportJSON()">💾 導出數據 JSON</button>
+    <table id="scoreTable">
+        <tbody id="scoreTableBody"></tbody>
+    </table>
+    
+    <div class="svg-holder">
+        <svg id="archeryTarget" viewBox="0 0 300 300">
+            <g id="targetDynamicRingsGroup"></g>
+            <g id="arrowGroup"></g>
+        </svg>
     </div>
-    </div>
+</div>
 
 <script>
-    // 核心變數
-    let scale = 1, posX = 0, posY = 0;
-    const svg = document.getElementById('archeryTarget');
-    const arrowGroup = document.getElementById('arrowGroup');
+    let fullRoundData = [[],[],[],[],[],[],[],[],[],[],[],[]]; // 簡化為 12 趟
+    let currentEnd = 0, currentIndex = 0;
 
-    // [新增] 點靶記分邏輯
-    svg.addEventListener('click', function(e) {
-        if (!document.getElementById('chkScoreMode').checked) return;
-        
+    // 1. 繪製靶紙 (解決空白問題)
+    function drawTarget() {
+        const group = document.getElementById('targetDynamicRingsGroup');
+        group.innerHTML = "";
+        for (let i = 10; i >= 1; i--) {
+            let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            circle.setAttribute("cx", 150);
+            circle.setAttribute("cy", 150);
+            circle.setAttribute("r", i * 15);
+            circle.setAttribute("fill", i % 2 === 0 ? (i > 8 ? "gold" : (i > 6 ? "red" : (i > 4 ? "blue" : "black"))) : "white");
+            circle.setAttribute("stroke", "black");
+            group.appendChild(circle);
+        }
+    }
+
+    // 2. 點擊判斷 M 與得分
+    document.getElementById('archeryTarget').addEventListener('click', function(e) {
+        const svg = e.currentTarget;
         const pt = svg.createSVGPoint();
         pt.x = e.clientX; pt.y = e.clientY;
         const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
         
-        registerArrow(svgP.x, svgP.y);
+        const dx = svgP.x - 150;
+        const dy = svgP.y - 150;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        
+        // 超出 150px 直接判定為 M
+        let score = dist > 150 ? "M" : Math.max(1, 10 - Math.floor(dist / 15));
+        
+        recordArrow(score, svgP.x, svgP.y);
     });
 
-    function registerArrow(x, y) {
-        if (currentEnd >= TOTAL_ROWS) return;
+    function recordArrow(score, x, y) {
+        if(currentEnd >= 12) return;
+        fullRoundData[currentEnd].push({score, x, y});
         
-        // 判定分數 (以中心 150, 150 計算)
-        const dx = x - 150;
-        const dy = y - 150;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        // 簡單邏輯：半徑 150 分為 10 圈
-        let score = Math.max(0, 10 - Math.floor(dist / 15));
-        if (dist > 150) score = "M";
-        
-        // 更新數據陣列
-        fullRoundData[currentEnd].push({ x, y, score });
-        renderArrow(x, y, score);
-        updateTable(score);
-    }
-
-    function renderArrow(x, y, score) {
+        // 在 SVG 上畫點
         let circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        circle.setAttribute("cx", x);
-        circle.setAttribute("cy", y);
-        circle.setAttribute("r", "5");
-        circle.setAttribute("fill", score === "M" ? "red" : "black");
-        arrowGroup.appendChild(circle);
-    }
-
-    function updateTable(score) {
-        const cell = document.getElementById(`cell-${currentEnd}-${currentIndex}`);
-        if(cell) cell.textContent = score;
+        circle.setAttribute("cx", x); circle.setAttribute("cy", y);
+        circle.setAttribute("r", 3); circle.setAttribute("fill", "lime");
+        document.getElementById('arrowGroup').appendChild(circle);
         
         currentIndex++;
-        if (currentIndex >= ARROWS_PER_END) {
-            currentIndex = 0;
-            currentEnd++;
-        }
-        updateActiveHighlight();
-        calculateMetrics(); // 計算運科指標
+        if(currentIndex >= 6) { currentIndex = 0; currentEnd++; }
     }
 
-    function calculateMetrics() {
-        const activeArrows = fullRoundData.flat().filter(a => a.score !== "M");
-        if (activeArrows.length === 0) return;
-        
-        // 簡單均值計算範例
-        const avgX = activeArrows.reduce((s, a) => s + a.x, 0) / activeArrows.length;
-        document.getElementById('mAccuracy').textContent = Math.round(Math.abs(avgX - 150)) + " px";
-        // 實際開發中可加入標準差公式
+    // 3. 匯出 JSON
+    function exportJSON() {
+        const dataStr = JSON.stringify(fullRoundData, null, 2);
+        const blob = new Blob([dataStr], {type: "application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = "ArcheryData_" + new Date().toISOString().slice(0,10) + ".json";
+        a.click();
     }
 
-    // 縮放與平移處理 (Pan & Zoom)
-    let isPanning = false;
-    svg.addEventListener('pointerdown', e => isPanning = true);
-    svg.addEventListener('pointermove', e => {
-        if (!isPanning) return;
-        posX += e.movementX; posY += e.movementY;
-        svg.style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-    });
-    svg.addEventListener('pointerup', () => isPanning = false);
-    
-    // 初始化靶紙
-    updateSvgTargetSkin();
+    drawTarget();
 </script>
 </body>
 </html>
