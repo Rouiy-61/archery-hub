@@ -382,24 +382,39 @@ function triggerShortTone(startTime) {
     osc.connect(gain); 
     gain.connect(audioCtx.destination);
     
-    // 根據選擇設定音效特性
-    if (soundMode === 'sharp') {
-        osc.type = 'square'; // 方波較為刺耳、有電子競技感
-        osc.frequency.setValueAtTime(1200, startTime); // 提高頻率讓聲音更尖銳
-    } else {
-        osc.type = 'sine';   // 正弦波柔和
-        osc.frequency.setValueAtTime(800, startTime);
-    }
+// 專業賽場音效引擎
+function playCompetitionSound(duration, isLong) {
+    ensureAudioContext();
+    const ctx = audioCtx;
     
-    gain.gain.setValueAtTime(0.6, startTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.15); // 讓聲音更乾脆
+    // 1. 建立一個雜訊源 (用於模擬喇叭的刺耳金屬感)
+    const bufferSize = ctx.sampleRate * duration;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
     
-    osc.start(startTime); 
-    osc.stop(startTime + 0.2);
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    // 2. 透過帶通濾波器 (Bandpass Filter) 塑造喇叭音色
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = isLong ? 600 : 900; // 長音較低沉，短音較尖銳
+    filter.Q.value = 10; // Q值越高，聲音越有「金屬穿透感」
+
+    // 3. 調整增益 (Envelope) 模擬喇叭啟動的快攻 (Attack)
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(0, ctx.currentTime);
+    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05); // 快速起音
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+
+    noise.connect(filter);
+    filter.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    noise.start();
+    noise.stop(ctx.currentTime + duration);
 }
-
-// 同理，調整 timeup_1long 的邏輯，如果選 sharp 模式，將時間延長且增加頻率變動
-
     function startSession() {
         ensureAudioContext();
         GLOBAL_ATHLETE_ID = document.getElementById('cfgAthleteId').value;
