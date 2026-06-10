@@ -209,11 +209,7 @@
 
             預備時間：<input type="number" id="cfgPrepSec" value="10" style="width: 40px;"> 秒<br>
             射擊時間：<input type="number" id="cfgShootSec" value="90" style="width: 40px;"> 秒<br>
-            音效模式：
-<select id="soundModeSelect" style="width: 140px; margin-top: 5px;">
-    <option value="soft">🎵 柔和練習音效</option>
-    <option value="sharp">📢 比賽尖銳喇叭</option>
-</select>
+            
             靶紙規格：
             <select id="targetSizeSelect" onchange="updateSvgTargetSkin()" style="width: 220px; margin-top: 5px;">
                 <option value="70m_90m">🎯 70m / 90m (122cm 全靶 1-10分)</option>
@@ -374,43 +370,14 @@
         } catch(e) { console.log("Audio Error:", e); }
     }
 
-function triggerShortTone(startTime) {
-    const soundMode = document.getElementById('soundModeSelect').value;
-    let osc = audioCtx.createOscillator(); 
-    let gain = audioCtx.createGain();
-    
-    osc.connect(gain); 
-    gain.connect(audioCtx.destination);
-    
-function playLongTone(startTime) {
-    const soundMode = document.getElementById('soundModeSelect').value;
-    const ctx = audioCtx;
-    
-function triggerShortTone(startTime) {
-    const soundMode = document.getElementById('soundModeSelect').value;
-    let osc = audioCtx.createOscillator(); 
-    let gain = audioCtx.createGain();
-    
-    osc.connect(gain); 
-    gain.connect(audioCtx.destination);
-    
-    // 根據選擇設定音效特性
-    if (soundMode === 'sharp') {
-        osc.type = 'square'; // 方波較為刺耳、有電子競技感
-        osc.frequency.setValueAtTime(1200, startTime); // 提高頻率讓聲音更尖銳
-    } else {
-        osc.type = 'sine';   // 正弦波柔和
-        osc.frequency.setValueAtTime(800, startTime);
+    function triggerShortTone(startTime) {
+        let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination); osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, startTime); gain.gain.setValueAtTime(0.8, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.18);
+        osc.start(startTime); osc.stop(startTime + 0.2);
     }
-    
-    gain.gain.setValueAtTime(0.6, startTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.15); // 讓聲音更乾脆
-    
-    osc.start(startTime); 
-    osc.stop(startTime + 0.2);
-}
 
-// 同理，調整 timeup_1long 的邏輯，如果選 sharp 模式，將時間延長且增加頻率變動
     function startSession() {
         ensureAudioContext();
         GLOBAL_ATHLETE_ID = document.getElementById('cfgAthleteId').value;
@@ -862,3 +829,4 @@ function triggerShortTone(startTime) {
 </script>
 </body>
 </html>
+
