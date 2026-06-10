@@ -386,38 +386,31 @@ function playLongTone(startTime) {
     const soundMode = document.getElementById('soundModeSelect').value;
     const ctx = audioCtx;
     
-    // 建立一個 GainNode 作為總音量控制
-    let masterGain = ctx.createGain();
-    masterGain.connect(ctx.destination);
-    masterGain.gain.setValueAtTime(0.5, startTime);
-    masterGain.gain.exponentialRampToValueAtTime(0.001, startTime + 1.2); // 1.2秒漸弱
-
+function triggerShortTone(startTime) {
+    const soundMode = document.getElementById('soundModeSelect').value;
+    let osc = audioCtx.createOscillator(); 
+    let gain = audioCtx.createGain();
+    
+    osc.connect(gain); 
+    gain.connect(audioCtx.destination);
+    
+    // 根據選擇設定音效特性
     if (soundMode === 'sharp') {
-        // 賽場尖銳模式：疊加兩個頻率創造「金屬共鳴感」
-        // 頻率 1: 1200Hz (基頻)
-        // 頻率 2: 1800Hz (高頻泛音，增加刺耳的穿透感)
-        [1200, 1800].forEach(freq => {
-            let osc = ctx.createOscillator();
-            osc.type = 'square'; // 方波諧波豐富
-            osc.frequency.setValueAtTime(freq, startTime);
-            
-            // 加入頻率掃描：模擬喇叭啟動瞬間的音高變化
-            osc.frequency.exponentialRampToValueAtTime(freq * 0.95, startTime + 0.5);
-            
-            osc.connect(masterGain);
-            osc.start(startTime);
-            osc.stop(startTime + 1.2);
-        });
+        osc.type = 'square'; // 方波較為刺耳、有電子競技感
+        osc.frequency.setValueAtTime(1200, startTime); // 提高頻率讓聲音更尖銳
     } else {
-        // 練習模式：簡單的單頻正弦波
-        let osc = ctx.createOscillator();
-        osc.type = 'sine';
+        osc.type = 'sine';   // 正弦波柔和
         osc.frequency.setValueAtTime(800, startTime);
-        osc.connect(masterGain);
-        osc.start(startTime);
-        osc.stop(startTime + 1.2);
     }
+    
+    gain.gain.setValueAtTime(0.6, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.15); // 讓聲音更乾脆
+    
+    osc.start(startTime); 
+    osc.stop(startTime + 0.2);
 }
+
+// 同理，調整 timeup_1long 的邏輯，如果選 sharp 模式，將時間延長且增加頻率變動
     function startSession() {
         ensureAudioContext();
         GLOBAL_ATHLETE_ID = document.getElementById('cfgAthleteId').value;
