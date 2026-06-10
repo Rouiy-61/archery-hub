@@ -382,38 +382,41 @@ function triggerShortTone(startTime) {
     osc.connect(gain); 
     gain.connect(audioCtx.destination);
     
-// 專業賽場音效引擎
-function playCompetitionSound(duration, isLong) {
-    ensureAudioContext();
+function playLongTone(startTime) {
+    const soundMode = document.getElementById('soundModeSelect').value;
     const ctx = audioCtx;
     
-    // 1. 建立一個雜訊源 (用於模擬喇叭的刺耳金屬感)
-    const bufferSize = ctx.sampleRate * duration;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-    
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
+    // 建立一個 GainNode 作為總音量控制
+    let masterGain = ctx.createGain();
+    masterGain.connect(ctx.destination);
+    masterGain.gain.setValueAtTime(0.5, startTime);
+    masterGain.gain.exponentialRampToValueAtTime(0.001, startTime + 1.2); // 1.2秒漸弱
 
-    // 2. 透過帶通濾波器 (Bandpass Filter) 塑造喇叭音色
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = isLong ? 600 : 900; // 長音較低沉，短音較尖銳
-    filter.Q.value = 10; // Q值越高，聲音越有「金屬穿透感」
-
-    // 3. 調整增益 (Envelope) 模擬喇叭啟動的快攻 (Attack)
-    const gainNode = ctx.createGain();
-    gainNode.gain.setValueAtTime(0, ctx.currentTime);
-    gainNode.gain.linearRampToValueAtTime(0.5, ctx.currentTime + 0.05); // 快速起音
-    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-
-    noise.connect(filter);
-    filter.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    noise.start();
-    noise.stop(ctx.currentTime + duration);
+    if (soundMode === 'sharp') {
+        // 賽場尖銳模式：疊加兩個頻率創造「金屬共鳴感」
+        // 頻率 1: 1200Hz (基頻)
+        // 頻率 2: 1800Hz (高頻泛音，增加刺耳的穿透感)
+        [1200, 1800].forEach(freq => {
+            let osc = ctx.createOscillator();
+            osc.type = 'square'; // 方波諧波豐富
+            osc.frequency.setValueAtTime(freq, startTime);
+            
+            // 加入頻率掃描：模擬喇叭啟動瞬間的音高變化
+            osc.frequency.exponentialRampToValueAtTime(freq * 0.95, startTime + 0.5);
+            
+            osc.connect(masterGain);
+            osc.start(startTime);
+            osc.stop(startTime + 1.2);
+        });
+    } else {
+        // 練習模式：簡單的單頻正弦波
+        let osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, startTime);
+        osc.connect(masterGain);
+        osc.start(startTime);
+        osc.stop(startTime + 1.2);
+    }
 }
     function startSession() {
         ensureAudioContext();
